@@ -47,6 +47,42 @@ const startupSchema = new mongoose.Schema(
       ref: 'User',
       required: [true, 'Founder reference is required'],
     },
+    aiAnalysis: {
+      type: new mongoose.Schema(
+        {
+          overallAssessment: {
+            type: String,
+            required: true,
+          },
+          problemStrength: {
+            score: { type: Number, required: true, min: 1, max: 10 },
+            explanation: { type: String, required: true },
+          },
+          marketPotential: {
+            score: { type: Number, required: true, min: 1, max: 10 },
+            explanation: { type: String, required: true },
+          },
+          feasibility: {
+            score: { type: Number, required: true, min: 1, max: 10 },
+            explanation: { type: String, required: true },
+          },
+          risks: [{ type: String }],
+          opportunities: [{ type: String }],
+          recommendations: [{ type: String }],
+          source: {
+            type: String,
+            enum: ['gemini', 'fallback'],
+            required: true,
+          },
+          generatedAt: {
+            type: Date,
+            default: Date.now,
+          },
+        },
+        { _id: false }
+      ),
+      default: null,
+    },
   },
   {
     timestamps: true,

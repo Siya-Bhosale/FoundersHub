@@ -172,6 +172,7 @@ const getStartupById = async (req, res) => {
         stage: startup.stage,
         description: startup.description,
         founder: founderData,
+        aiAnalysis: startup.aiAnalysis || null,
         createdAt: startup.createdAt,
         updatedAt: startup.updatedAt,
       },
