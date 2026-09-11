@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getStartupById, deleteStartup } from '../../api/startups';
+import { generateStartupAnalysis, getStartupAnalysis } from '../../api/ai';
+import AIAnalysisCard from '../../components/ai/AIAnalysisCard';
 import {
   ArrowLeft,
   Edit3,
@@ -16,6 +18,7 @@ import {
   HelpCircle,
   Lightbulb,
   FileText,
+  Sparkles,
 } from 'lucide-react';
 
 const STAGE_CONFIG = {
@@ -36,6 +39,11 @@ const StartupDetails = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(location.state?.message || '');
 
+  // AI Analysis state
+  const [analysis, setAnalysis] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState('');
+
   // Delete confirmation state
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -47,7 +55,22 @@ const StartupDetails = () => {
       setError('');
       try {
         const data = await getStartupById(id);
-        setStartup(data.startup);
+        const s = data.startup;
+        setStartup(s);
+
+        if (s?.aiAnalysis && s.aiAnalysis.overallAssessment) {
+          setAnalysis(s.aiAnalysis);
+        } else {
+          // If not in the startup payload, attempt to load existing analysis if user is a founder
+          try {
+            const aiRes = await getStartupAnalysis(id);
+            if (aiRes.data && aiRes.data.overallAssessment) {
+              setAnalysis(aiRes.data);
+            }
+          } catch (aiErr) {
+            // 404 is expected if analysis hasn't been generated yet
+          }
+        }
       } catch (err) {
         setError(err.message || 'Startup not found');
       } finally {
@@ -57,6 +80,22 @@ const StartupDetails = () => {
 
     fetchStartup();
   }, [id]);
+
+  const handleAnalyze = async () => {
+    if (analyzing) return;
+    setAnalyzing(true);
+    setAnalysisError('');
+    try {
+      const response = await generateStartupAnalysis(id);
+      if (response.data) {
+        setAnalysis(response.data);
+      }
+    } catch (err) {
+      setAnalysisError(err.message || 'Failed to analyze startup idea. Please try again.');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -136,7 +175,28 @@ const StartupDetails = () => {
           </Link>
 
           {isOwner && (
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              {user?.role === 'FOUNDER' && (
+                <button
+                  onClick={handleAnalyze}
+                  disabled={analyzing}
+                  type="button"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-60 shadow-sm shadow-indigo-100 transition"
+                >
+                  {analyzing ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Analyzing Startup...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>{analysis ? 'Re-analyze with AI' : 'Analyze with AI'}</span>
+                    </>
+                  )}
+                </button>
+              )}
+
               <Link
                 to={`/startups/${startup.id}/edit`}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900 shadow-sm transition"
@@ -253,6 +313,15 @@ const StartupDetails = () => {
             </p>
           </div>
         )}
+
+        {/* AI Startup Analysis Section */}
+        <AIAnalysisCard
+          analysis={analysis}
+          loading={analyzing}
+          error={analysisError}
+          onAnalyze={handleAnalyze}
+          canAnalyze={isOwner && user?.role === 'FOUNDER'}
+        />
       </div>
 
       {/* Delete Confirmation Modal */}
