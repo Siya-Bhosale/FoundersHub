@@ -12,6 +12,16 @@ const joinRequestSchema = new mongoose.Schema(
       ref: 'User',
       required: [true, 'Developer user reference is required'],
     },
+    department: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Department',
+      default: null,
+    },
+    requestedRole: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     message: {
       type: String,
       trim: true,

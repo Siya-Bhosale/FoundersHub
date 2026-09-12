@@ -130,8 +130,11 @@ const createTask = async (req, res) => {
  * GET /api/startups/:startupId/tasks
  * GET /api/tasks/startup/:startupId
  * List tasks for a startup:
- * - If Founder: returns all tasks for this startup.
- * - If Developer (active team member): returns ONLY tasks assigned to this developer.
+ * - If Founder: returns all startup tasks (or filtered by view=my if specified).
+ * - If Developer (active team member):
+ *     - view=my: returns ONLY tasks assigned to this developer.
+ *     - view=all: returns ALL tasks belonging to startup (historical tasks included for late-joiners).
+ * - Dynamically derives department from assignee's active TeamMembership.
  * - If neither: 403 Forbidden.
  */
 const getStartupTasks = async (req, res) => {
@@ -147,9 +150,15 @@ const getStartupTasks = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Forbidden: Access denied' });
     }
 
+    const view = (req.query.view || (access.isFounder ? 'all' : 'my')).toLowerCase();
     const query = { startup: startupId };
+
     if (!access.isFounder) {
-      // Developer only sees tasks assigned to them
+      if (view === 'my') {
+        query.assignedTo = new mongoose.Types.ObjectId(userId);
+      }
+      // If view === 'all', developer sees all startup tasks
+    } else if (view === 'my') {
       query.assignedTo = new mongoose.Types.ObjectId(userId);
     }
 
@@ -157,11 +166,37 @@ const getStartupTasks = async (req, res) => {
       .populate('assignedTo', 'name email role')
       .sort({ day: 1, createdAt: 1 });
 
+    // Derive department for each assignee from active TeamMembership
+    const memberships = await TeamMembership.find({
+      startup: startupId,
+      status: 'ACTIVE',
+    }).populate('department', 'name description');
+
+    const memberDeptMap = {};
+    memberships.forEach((m) => {
+      const uId = (m.user?._id || m.user)?.toString();
+      if (uId && m.department) {
+        memberDeptMap[uId] = {
+          id: m.department._id?.toString() || m.department.toString(),
+          _id: m.department._id?.toString() || m.department.toString(),
+          name: m.department.name,
+          description: m.department.description || '',
+        };
+      }
+    });
+
+    const formattedTasks = tasks.map((t) => {
+      const tObj = t.toObject ? t.toObject() : { ...t };
+      const assigneeId = (t.assignedTo?._id || t.assignedTo)?.toString();
+      tObj.derivedDepartment = assigneeId && memberDeptMap[assigneeId] ? memberDeptMap[assigneeId] : null;
+      return tObj;
+    });
+
     return res.status(200).json({
       success: true,
-      count: tasks.length,
-      data: tasks,
-      tasks,
+      count: formattedTasks.length,
+      data: formattedTasks,
+      tasks: formattedTasks,
     });
   } catch (error) {
     console.error('Error fetching tasks:', error.message);

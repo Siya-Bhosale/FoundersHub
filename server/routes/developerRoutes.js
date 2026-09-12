@@ -10,6 +10,10 @@ router.get('/profile', authMiddleware, requireRole('DEVELOPER'), developerContro
 router.put('/profile', authMiddleware, requireRole('DEVELOPER'), developerController.updateMyProfile);
 router.delete('/profile', authMiddleware, requireRole('DEVELOPER'), developerController.deleteMyProfile);
 
+// Resume upload & authenticated retrieval
+router.post('/resume', authMiddleware, requireRole('DEVELOPER'), developerController.uploadResume);
+router.get('/resume/:userId', authMiddleware, developerController.getResume);
+
 // Developer-only Startup Workspace & Membership routes
 router.get('/my-startups', authMiddleware, requireRole('DEVELOPER'), developerController.getMyStartups);
 router.get('/startups/:startupId', authMiddleware, requireRole('DEVELOPER'), developerController.getDeveloperStartupWorkspace);

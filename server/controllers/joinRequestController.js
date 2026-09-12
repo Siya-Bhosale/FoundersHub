@@ -3,6 +3,7 @@ const JoinRequest = require('../models/JoinRequest');
 const TeamMembership = require('../models/TeamMembership');
 const Startup = require('../models/Startup');
 const DeveloperProfile = require('../models/DeveloperProfile');
+const Department = require('../models/Department');
 
 /**
  * Helper to safely extract founder user ID as a string from a Startup document,
@@ -24,7 +25,7 @@ const getFounderId = (startup) => {
 const createJoinRequest = async (req, res) => {
   try {
     const startupId = req.params?.startupId || req.body?.startupId;
-    const message = req.body?.message;
+    const { message, department, departmentId, requestedRole, position } = req.body;
 
     if (!startupId || !mongoose.Types.ObjectId.isValid(startupId)) {
       return res.status(400).json({
@@ -49,7 +50,7 @@ const createJoinRequest = async (req, res) => {
       });
     }
 
-    // Prevent developer from requesting to join their own startup if they somehow own it
+    // Prevent developer from requesting to join their own startup if they own it
     const startupFounderId = getFounderId(startup);
     if (startupFounderId && startupFounderId === developerUserId) {
       return res.status(400).json({
@@ -86,6 +87,62 @@ const createJoinRequest = async (req, res) => {
       });
     }
 
+    // Department verification
+    const targetDeptId = department || departmentId;
+    let deptCount = await Department.countDocuments({ startup: startup._id });
+
+    if (deptCount === 0) {
+      const DEFAULT_DEPTS = [
+        { name: 'Technical', description: 'Core software architecture, backend services, and DevOps' },
+        { name: 'Development', description: 'Frontend applications, mobile clients, and web features' },
+        { name: 'Design', description: 'Product design, UX research, and design systems' },
+        { name: 'Marketing', description: 'Brand strategy, developer advocacy, and content distribution' },
+        { name: 'Sales', description: 'Enterprise sales, partnerships, and business development' },
+        { name: 'Finance', description: 'Financial planning, accounting, and investor relations' },
+        { name: 'Operations', description: 'People operations, legal compliance, and startup agility' },
+      ];
+      try {
+        await Department.insertMany(
+          DEFAULT_DEPTS.map((d) => ({
+            startup: startup._id,
+            name: d.name,
+            description: d.description,
+            createdBy: startup.founder,
+          }))
+        );
+        deptCount = DEFAULT_DEPTS.length;
+      } catch (e) {
+        // Concurrency catch
+      }
+    }
+
+    let deptDoc = null;
+    if (targetDeptId) {
+      if (!mongoose.Types.ObjectId.isValid(targetDeptId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please choose a valid department for this startup',
+        });
+      }
+      deptDoc = await Department.findOne({ _id: targetDeptId, startup: startup._id });
+      if (!deptDoc) {
+        return res.status(400).json({
+          success: false,
+          message: 'The selected department does not belong to this startup',
+        });
+      }
+    } else {
+      deptDoc = await Department.findOne({ startup: startup._id });
+    }
+
+    const roleName = requestedRole || position || req.body.role || 'Developer';
+    if (!roleName || typeof roleName !== 'string' || !roleName.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Position / Role is required (e.g. Backend Developer)',
+      });
+    }
+
     if (message !== undefined && typeof message !== 'string') {
       return res.status(400).json({
         success: false,
@@ -103,6 +160,8 @@ const createJoinRequest = async (req, res) => {
     const request = await JoinRequest.create({
       startup: startup._id,
       developer: new mongoose.Types.ObjectId(developerUserId),
+      department: deptDoc._id,
+      requestedRole: roleName.trim().slice(0, 100),
       message: message ? message.trim() : '',
       status: 'PENDING',
     });
@@ -112,8 +171,14 @@ const createJoinRequest = async (req, res) => {
       message: 'Join request submitted successfully',
       request: {
         id: request._id.toString(),
+        _id: request._id.toString(),
         startup: request.startup.toString(),
         developer: request.developer.toString(),
+        department: {
+          id: deptDoc._id.toString(),
+          name: deptDoc.name,
+        },
+        requestedRole: request.requestedRole,
         message: request.message,
         status: request.status,
         createdAt: request.createdAt,
@@ -145,6 +210,7 @@ const getMyJoinRequests = async (req, res) => {
 
     const requests = await JoinRequest.find({ developer: developerUserId })
       .populate('startup', 'name tagline industry stage')
+      .populate('department', 'name description')
       .sort({ createdAt: -1 });
 
     const formattedRequests = requests.map((r) => ({
@@ -158,6 +224,13 @@ const getMyJoinRequests = async (req, res) => {
             stage: r.startup.stage,
           }
         : null,
+      department: r.department
+        ? {
+            id: r.department._id.toString(),
+            name: r.department.name,
+          }
+        : null,
+      requestedRole: r.requestedRole || '',
       message: r.message,
       status: r.status,
       createdAt: r.createdAt,
@@ -179,7 +252,7 @@ const getMyJoinRequests = async (req, res) => {
 
 /**
  * GET /api/startups/:startupId/join-requests OR /api/join-requests/startup/:startupId
- * Authenticated FOUNDER views all requests submitted to their startup
+ * Authenticated FOUNDER views all requests submitted to their startup with full applicant details
  */
 const getStartupJoinRequests = async (req, res) => {
   try {
@@ -212,9 +285,10 @@ const getStartupJoinRequests = async (req, res) => {
 
     const requests = await JoinRequest.find({ startup: startup._id })
       .populate('developer', 'name email role')
+      .populate('department', 'name description')
       .sort({ createdAt: -1 });
 
-    // Fetch DeveloperProfiles for public skills/experience details
+    // Fetch DeveloperProfiles for skills, social links, and resume info
     const developerIds = requests
       .map((r) => r.developer?._id)
       .filter(Boolean);
@@ -228,11 +302,19 @@ const getStartupJoinRequests = async (req, res) => {
     const formattedRequests = requests.map((r) => {
       const dev = r.developer;
       const devProfile = dev ? profileMap[dev._id.toString()] : null;
-      const skills = devProfile?.skills || dev?.skills || [];
+      const skills = devProfile?.skills || [];
 
       return {
         id: r._id.toString(),
         startup: r.startup.toString(),
+        department: r.department
+          ? {
+              id: r.department._id.toString(),
+              name: r.department.name,
+              description: r.department.description || '',
+            }
+          : null,
+        requestedRole: r.requestedRole || '',
         developer: dev
           ? {
               id: dev._id.toString(),
@@ -245,9 +327,16 @@ const getStartupJoinRequests = async (req, res) => {
                     bio: devProfile.bio,
                     skills: devProfile.skills || [],
                     experience: devProfile.experience,
+                    education: devProfile.education || '',
                     github: devProfile.github,
                     linkedin: devProfile.linkedin,
                     portfolio: devProfile.portfolio,
+                    twitter: devProfile.twitter || '',
+                    otherSocial: devProfile.otherSocial || '',
+                    resumeUrl: devProfile.resumeUrl || '',
+                    resumeFileName: devProfile.resumeFileName || '',
+                    resumeOriginalName: devProfile.resumeOriginalName || '',
+                    resumeUploadedAt: devProfile.resumeUploadedAt,
                     availability: devProfile.availability,
                   }
                 : null,
@@ -275,7 +364,7 @@ const getStartupJoinRequests = async (req, res) => {
 
 /**
  * PUT /api/join-requests/:requestId/accept
- * Authenticated FOUNDER accepts a pending join request
+ * Authenticated FOUNDER accepts a pending join request and activates member in the requested department
  */
 const acceptJoinRequest = async (req, res) => {
   try {
@@ -319,7 +408,7 @@ const acceptJoinRequest = async (req, res) => {
     request.reviewedAt = new Date();
     await request.save();
 
-    // Create or activate TeamMembership
+    // Create or activate TeamMembership with department & role
     let membership = await TeamMembership.findOne({
       startup: request.startup._id,
       user: request.developer,
@@ -328,6 +417,8 @@ const acceptJoinRequest = async (req, res) => {
     if (membership) {
       membership.status = 'ACTIVE';
       membership.role = 'DEVELOPER';
+      membership.department = request.department || null;
+      membership.departmentRole = request.requestedRole || '';
       membership.joinedAt = new Date();
       await membership.save();
     } else {
@@ -335,6 +426,8 @@ const acceptJoinRequest = async (req, res) => {
         startup: request.startup._id,
         user: request.developer,
         role: 'DEVELOPER',
+        department: request.department || null,
+        departmentRole: request.requestedRole || '',
         status: 'ACTIVE',
         joinedAt: new Date(),
       });
@@ -347,6 +440,8 @@ const acceptJoinRequest = async (req, res) => {
         id: request._id.toString(),
         startup: request.startup._id.toString(),
         developer: request.developer.toString(),
+        department: request.department ? request.department.toString() : null,
+        requestedRole: request.requestedRole,
         status: request.status,
         reviewedAt: request.reviewedAt,
       },
@@ -355,6 +450,8 @@ const acceptJoinRequest = async (req, res) => {
         startup: membership.startup.toString(),
         user: membership.user.toString(),
         role: membership.role,
+        department: membership.department ? membership.department.toString() : null,
+        departmentRole: membership.departmentRole,
         status: membership.status,
         joinedAt: membership.joinedAt,
       },

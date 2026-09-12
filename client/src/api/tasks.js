@@ -4,8 +4,11 @@ import apiClient from './client';
  * Get all tasks for a startup.
  * GET /api/startups/:startupId/tasks
  */
-export const getStartupTasks = async (startupId) => {
-  return await apiClient(`/startups/${startupId}/tasks`);
+export const getStartupTasks = async (startupId, params = {}) => {
+  const query = new URLSearchParams();
+  if (params.view) query.append('view', params.view);
+  const qs = query.toString() ? `?${query.toString()}` : '';
+  return await apiClient(`/startups/${startupId}/tasks${qs}`);
 };
 
 /**

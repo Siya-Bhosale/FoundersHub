@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getAllStartups } from '../../api/startups';
 import { submitJoinRequest, getMyJoinRequests } from '../../api/joinRequests';
+import { getStartupDepartments } from '../../api/departments';
 import {
   Compass,
   Search,
@@ -16,6 +17,8 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
+  Briefcase,
+  Layers,
 } from 'lucide-react';
 
 const STAGE_CONFIG = {
@@ -39,6 +42,10 @@ const DiscoverStartups = () => {
   // Developer Join Requests state
   const [myRequestsMap, setMyRequestsMap] = useState({});
   const [activeStartupForJoin, setActiveStartupForJoin] = useState(null);
+  const [joinDepartments, setJoinDepartments] = useState([]);
+  const [loadingJoinDepts, setLoadingJoinDepts] = useState(false);
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [requestedRole, setRequestedRole] = useState('');
   const [joinMessage, setJoinMessage] = useState('');
   const [submittingJoin, setSubmittingJoin] = useState(false);
   const [joinError, setJoinError] = useState('');
@@ -96,29 +103,60 @@ const DiscoverStartups = () => {
     return matchesSearch && matchesStage && matchesIndustry;
   });
 
-  const handleOpenJoinModal = (startup) => {
+  const handleOpenJoinModal = async (startup) => {
     setActiveStartupForJoin(startup);
-    setJoinMessage('I would like to contribute my React, Node.js and MongoDB skills to the development of this startup.');
+    setJoinMessage('I would like to contribute to the development of this startup.');
+    setRequestedRole('');
+    setSelectedDepartment('');
     setJoinError('');
     setJoinSuccess('');
+    setLoadingJoinDepts(true);
+
+    try {
+      const res = await getStartupDepartments(startup.id || startup._id);
+      const depts = res?.departments || [];
+      setJoinDepartments(depts);
+      if (depts.length > 0) {
+        setSelectedDepartment(depts[0]._id || depts[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to load startup departments:', err);
+      setJoinError('Could not load departments for this startup.');
+    } finally {
+      setLoadingJoinDepts(false);
+    }
   };
 
   const handleSendJoinRequest = async (e) => {
     e.preventDefault();
     if (submittingJoin || !activeStartupForJoin) return;
+
+    if (!selectedDepartment) {
+      setJoinError('Please select a department to apply to.');
+      return;
+    }
+
+    if (!requestedRole.trim()) {
+      setJoinError('Please specify the position/role you are applying for (e.g. Backend Developer).');
+      return;
+    }
+
     setSubmittingJoin(true);
     setJoinError('');
     try {
       const res = await submitJoinRequest({
-        startupId: activeStartupForJoin.id,
+        startupId: activeStartupForJoin.id || activeStartupForJoin._id,
+        department: selectedDepartment,
+        requestedRole: requestedRole.trim(),
         message: joinMessage.trim(),
       });
       if (res?.success) {
         setMyRequestsMap((prev) => ({
           ...prev,
-          [activeStartupForJoin.id]: 'PENDING',
+          [activeStartupForJoin.id || activeStartupForJoin._id]: 'PENDING',
         }));
-        setJoinSuccess(`Join request submitted to ${activeStartupForJoin.name}!`);
+        setJoinSuccess(`Application submitted to ${activeStartupForJoin.name} (${requestedRole.trim()})!`);
+        setTimeout(() => setJoinSuccess(''), 5000);
         setActiveStartupForJoin(null);
       }
     } catch (err) {
@@ -350,7 +388,7 @@ const DiscoverStartups = () => {
               <div className="flex items-center gap-2.5">
                 <UserPlus className="w-5 h-5 text-indigo-400" />
                 <div>
-                  <h3 className="text-base font-bold text-white">Join Startup Team</h3>
+                  <h3 className="text-base font-bold text-white">Apply to join Startup</h3>
                   <p className="text-[11px] text-slate-400">{activeStartupForJoin.name}</p>
                 </div>
               </div>
@@ -362,46 +400,109 @@ const DiscoverStartups = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSendJoinRequest} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Why do you want to join this startup?
-                </label>
-                <textarea
-                  rows={4}
-                  maxLength={1000}
-                  value={joinMessage}
-                  onChange={(e) => setJoinMessage(e.target.value)}
-                  placeholder="I would like to contribute my React, Node.js and MongoDB skills to the development of this startup."
-                  className="w-full px-3.5 py-2.5 text-xs text-white bg-[#171A24] border border-[#2A2F42] rounded-xl focus:outline-hidden focus:border-indigo-500 placeholder:text-slate-500"
-                />
+            {loadingJoinDepts ? (
+              <div className="py-8 flex flex-col items-center justify-center space-y-2">
+                <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                <span className="text-xs text-slate-400">Loading startup departments...</span>
               </div>
-
-              {joinError && (
-                <div className="p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-xs text-red-400 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-                  <span>{joinError}</span>
+            ) : joinDepartments.length === 0 ? (
+              <div className="space-y-4">
+                <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-800/60 text-xs text-amber-300 space-y-1">
+                  <p className="font-semibold">No Departments Created</p>
+                  <p>This startup has not created any departments yet.</p>
                 </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveStartupForJoin(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingJoin}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 transition shadow-lg shadow-indigo-600/20 cursor-pointer"
-                >
-                  {submittingJoin ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
-                  <span>Send Request</span>
-                </button>
+                <p className="text-xs text-slate-400">
+                  You can apply to this startup once the founder configures at least one team department.
+                </p>
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveStartupForJoin(null)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] transition"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
-            </form>
+            ) : (
+              <form onSubmit={handleSendJoinRequest} className="space-y-4">
+                {/* Choose Department */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Choose Department <span className="text-rose-400">*</span>
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={selectedDepartment}
+                      onChange={(e) => setSelectedDepartment(e.target.value)}
+                      required
+                      className="w-full px-3.5 py-2.5 text-xs text-white bg-[#171A24] border border-[#2A2F42] rounded-xl focus:outline-hidden focus:border-indigo-500 transition cursor-pointer"
+                    >
+                      {joinDepartments.map((dept) => (
+                        <option key={dept._id || dept.id} value={dept._id || dept.id}>
+                          {dept.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Choose Position / Role */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Choose Position / Role <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Backend Developer, UI Designer, Full Stack Developer"
+                    value={requestedRole}
+                    onChange={(e) => setRequestedRole(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs text-white bg-[#171A24] border border-[#2A2F42] rounded-xl focus:outline-hidden focus:border-indigo-500 placeholder:text-slate-500 transition"
+                  />
+                </div>
+
+                {/* Message to Founder */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Message to Founder <span className="text-slate-500 font-normal">(Optional)</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    maxLength={1000}
+                    value={joinMessage}
+                    onChange={(e) => setJoinMessage(e.target.value)}
+                    placeholder="I would like to contribute to backend development and API architecture..."
+                    className="w-full px-3.5 py-2.5 text-xs text-white bg-[#171A24] border border-[#2A2F42] rounded-xl focus:outline-hidden focus:border-indigo-500 placeholder:text-slate-500 resize-none transition"
+                  />
+                </div>
+
+                {joinError && (
+                  <div className="p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-xs text-red-400 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                    <span>{joinError}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveStartupForJoin(null)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingJoin}
+                    className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 transition shadow-lg shadow-indigo-600/20 cursor-pointer"
+                  >
+                    {submittingJoin ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+                    <span>Apply</span>
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

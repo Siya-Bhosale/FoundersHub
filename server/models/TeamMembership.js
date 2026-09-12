@@ -17,6 +17,16 @@ const teamMembershipSchema = new mongoose.Schema(
       default: 'DEVELOPER',
       trim: true,
     },
+    department: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Department',
+      default: null,
+    },
+    departmentRole: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     status: {
       type: String,
       enum: ['ACTIVE', 'INACTIVE'],

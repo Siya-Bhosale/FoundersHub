@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getStartupById } from '../../api/startups';
 import { getStartupTasks, updateTask } from '../../api/tasks';
+import { getStartupDepartments } from '../../api/departments';
 import { useAuth } from '../../context/AuthContext';
 import DeveloperWorkspaceHeader from '../../components/developer/DeveloperWorkspaceHeader';
 import {
@@ -16,6 +17,7 @@ import {
   Sparkles,
   ArrowRight,
   ShieldAlert,
+  Layers,
 } from 'lucide-react';
 
 const COLUMNS = [
@@ -26,6 +28,7 @@ const COLUMNS = [
 ];
 
 const PRIORITY_BADGES = {
+  CRITICAL: 'bg-rose-950/80 text-rose-300 border-rose-800/80',
   HIGH: 'bg-rose-950/60 text-rose-400 border-rose-800/60',
   MEDIUM: 'bg-amber-950/60 text-amber-400 border-amber-800/60',
   LOW: 'bg-slate-800 text-slate-300 border-slate-700',
@@ -38,9 +41,11 @@ const DeveloperTasksPage = () => {
 
   const [startup, setStartup] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [departmentFilter, setDepartmentFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [taskFilter, setTaskFilter] = useState('MY_TASKS'); // 'MY_TASKS' or 'ALL'
+  const [taskFilter, setTaskFilter] = useState('MY_TASKS'); // 'MY_TASKS' | 'ALL'
   const [updatingTaskId, setUpdatingTaskId] = useState(null);
   const [actionFeedback, setActionFeedback] = useState('');
 
@@ -52,33 +57,34 @@ const DeveloperTasksPage = () => {
     return '';
   };
 
-  useEffect(() => {
-    let mounted = true;
-    const loadTasks = async () => {
-      try {
-        const [sRes, tRes] = await Promise.all([
-          getStartupById(startupId),
-          getStartupTasks(startupId),
-        ]);
-        if (mounted) {
-          setStartup(sRes.startup);
-          setTasks(tRes.data || tRes.tasks || []);
-          try {
-            localStorage.setItem('sprintfounders_active_startup', startupId);
-          } catch (e) {}
-        }
-      } catch (err) {
-        if (mounted) setError(err.message || 'Failed to load tasks');
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
+  const loadTasks = async (filterMode) => {
+    setLoading(true);
+    try {
+      const viewParam = filterMode === 'MY_TASKS' ? 'my' : 'all';
+      const [sRes, tRes, dRes] = await Promise.all([
+        getStartupById(startupId),
+        getStartupTasks(startupId, { view: viewParam }),
+        getStartupDepartments(startupId).catch(() => ({ departments: [] })),
+      ]);
 
-    if (startupId) loadTasks();
-    return () => {
-      mounted = false;
-    };
-  }, [startupId]);
+      setStartup(sRes.startup);
+      setTasks(tRes.data || tRes.tasks || []);
+      setDepartments(dRes.departments || []);
+      try {
+        localStorage.setItem('sprintfounders_active_startup', startupId);
+      } catch (e) {}
+    } catch (err) {
+      setError(err.message || 'Failed to load tasks');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (startupId) {
+      loadTasks(taskFilter);
+    }
+  }, [startupId, taskFilter]);
 
   const handleStatusChange = async (taskId, newStatus) => {
     setUpdatingTaskId(taskId);
@@ -132,11 +138,14 @@ const DeveloperTasksPage = () => {
     );
   }
 
-  // Filter tasks
+  // Filter tasks: in ALL view, apply optional department filter
   const displayedTasks = tasks.filter((t) => {
-    if (taskFilter === 'ALL') return true;
-    const assignedId = getAssigneeId(t.assignedTo);
-    return !assignedId || assignedId === currentUserId;
+    if (taskFilter === 'MY_TASKS') return true; // Already filtered by backend view=my
+    if (departmentFilter === 'ALL') return true;
+
+    const deptId = t.derivedDepartment?._id || t.derivedDepartment?.id;
+    const deptName = t.derivedDepartment?.name;
+    return deptId === departmentFilter || deptName === departmentFilter;
   });
 
   return (
@@ -160,35 +169,58 @@ const DeveloperTasksPage = () => {
                 Kanban Task Board
               </h2>
               <p className="text-xs text-slate-400">
-                Manage your task execution and delivery status.
+                {taskFilter === 'MY_TASKS'
+                  ? 'Showing tasks assigned directly to you.'
+                  : 'Showing startup-wide deliverables across all team members.'}
               </p>
             </div>
           </div>
 
-          {/* Filter Toggle: My Tasks vs All Team Tasks */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#171A24] border border-[#2A2F42] self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setTaskFilter('MY_TASKS')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                taskFilter === 'MY_TASKS'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              My Tasks ({tasks.filter((t) => getAssigneeId(t.assignedTo) === currentUserId).length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setTaskFilter('ALL')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                taskFilter === 'ALL'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              All Team Tasks ({tasks.length})
-            </button>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Department Filter (Only active in ALL TASKS view) */}
+            {taskFilter === 'ALL' && departments.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <select
+                  value={departmentFilter}
+                  onChange={(e) => setDepartmentFilter(e.target.value)}
+                  className="bg-[#171A24] text-xs text-slate-200 rounded-xl px-3 py-1.5 border border-[#2A2F42] hover:border-[#373E54] focus:outline-none focus:border-indigo-500 transition cursor-pointer"
+                >
+                  <option value="ALL">All Departments</option>
+                  {departments.map((dept) => (
+                    <option key={dept._id || dept.id} value={dept._id || dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Filter Toggle: MY TASKS vs ALL TASKS */}
+            <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#171A24] border border-[#2A2F42]">
+              <button
+                type="button"
+                onClick={() => setTaskFilter('MY_TASKS')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  taskFilter === 'MY_TASKS'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                MY TASKS
+              </button>
+              <button
+                type="button"
+                onClick={() => setTaskFilter('ALL')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                  taskFilter === 'ALL'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                ALL TASKS
+              </button>
+            </div>
           </div>
         </div>
 
@@ -249,6 +281,12 @@ const DeveloperTasksPage = () => {
                                 {priority}
                               </span>
 
+                              {task.derivedDepartment?.name && (
+                                <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-indigo-950/70 text-indigo-300 border border-indigo-800/50 uppercase tracking-wider">
+                                  {task.derivedDepartment.name}
+                                </span>
+                              )}
+
                               {task.day && (
                                 <span className="text-[10px] text-slate-400 font-medium">
                                   Day {task.day}
@@ -267,23 +305,23 @@ const DeveloperTasksPage = () => {
                             )}
                           </div>
 
-                          {/* Assignee & Due Date */}
+                          {/* Assignee & Status */}
                           <div className="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-[#232735]">
-                            <div className="flex items-center gap-1.5">
-                              <User className="w-3 h-3 text-slate-500" />
+                            <div className="flex items-center gap-1.5 truncate">
+                              <User className="w-3 h-3 text-slate-500 shrink-0" />
                               <span className="truncate max-w-[110px]">
                                 {task.assignedTo?.name || (isMine ? 'You' : 'Unassigned')}
                               </span>
                             </div>
 
                             {isMine && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-950/80 text-indigo-300 font-bold border border-indigo-800/40">
-                                Assigned to you
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-950/80 text-indigo-300 font-bold border border-indigo-800/40 shrink-0">
+                                Mine
                               </span>
                             )}
                           </div>
 
-                          {/* Quick Status Shift Dropdown / Buttons */}
+                          {/* Quick Status Shift Buttons */}
                           <div className="pt-2 border-t border-[#232735]/80 flex items-center justify-between gap-1.5">
                             <span className="text-[10px] text-slate-500 font-medium">Move:</span>
                             <div className="flex items-center gap-1">

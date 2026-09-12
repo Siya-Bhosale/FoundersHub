@@ -3,10 +3,10 @@ import apiClient from './client';
 /**
  * Submit a join request for a startup (DEVELOPER only)
  */
-export const submitJoinRequest = async ({ startupId, message }) => {
+export const submitJoinRequest = async ({ startupId, department, requestedRole, message }) => {
   return await apiClient('/join-requests', {
     method: 'POST',
-    body: JSON.stringify({ startupId, message }),
+    body: JSON.stringify({ startupId, department, requestedRole, message }),
   });
 };
 

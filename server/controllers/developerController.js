@@ -5,8 +5,44 @@ const Startup = require('../models/Startup');
 const Task = require('../models/Task');
 const Sprint = require('../models/Sprint');
 const User = require('../models/User');
+const JoinRequest = require('../models/JoinRequest');
 const { calculateExecutionScore } = require('../services/executionScoreService');
 const { GoogleGenAI } = require('@google/genai');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+
+// Configure multer storage for resumes
+const RESUME_UPLOAD_DIR = path.join(__dirname, '../uploads/resumes');
+if (!fs.existsSync(RESUME_UPLOAD_DIR)) {
+  fs.mkdirSync(RESUME_UPLOAD_DIR, { recursive: true });
+}
+
+const resumeStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, RESUME_UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const userId = (req.user?.userId || req.user?.id || 'dev').toString();
+    const uniqueSuffix = `${userId}_${Date.now()}${ext}`;
+    cb(null, uniqueSuffix);
+  },
+});
+
+const uploadResumeMiddleware = multer({
+  storage: resumeStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowedExts = ['.pdf', '.doc', '.docx'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedExts.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF, DOC, or DOCX files are allowed for resume upload.'));
+    }
+  },
+}).single('resume');
 
 const ALLOWED_AVAILABILITIES = ['AVAILABLE', 'PART_TIME', 'NOT_AVAILABLE'];
 
@@ -27,6 +63,7 @@ const formatProfile = (p) => {
     p.user && typeof p.user === 'object' && p.user._id
       ? {
           id: p.user._id.toString(),
+          _id: p.user._id.toString(),
           name: p.user.name,
           email: p.user.email,
           role: p.user.role,
@@ -35,13 +72,21 @@ const formatProfile = (p) => {
 
   return {
     id: p._id.toString(),
+    _id: p._id.toString(),
     user: userData,
     bio: p.bio || '',
     skills: Array.isArray(p.skills) ? p.skills : [],
     experience: p.experience || '',
+    education: p.education || '',
     github: p.github || '',
     linkedin: p.linkedin || '',
     portfolio: p.portfolio || '',
+    twitter: p.twitter || '',
+    otherSocial: p.otherSocial || '',
+    resumeUrl: p.resumeUrl || '',
+    resumeFileName: p.resumeFileName || '',
+    resumeOriginalName: p.resumeOriginalName || '',
+    resumeUploadedAt: p.resumeUploadedAt || null,
     availability: p.availability || 'AVAILABLE',
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
@@ -62,7 +107,7 @@ const createProfile = async (req, res) => {
       });
     }
 
-    const { bio, skills, experience, github, linkedin, portfolio, availability } = req.body;
+    const { bio, skills, experience, education, github, linkedin, portfolio, twitter, otherSocial, availability } = req.body;
 
     // Validation
     if (bio && (typeof bio !== 'string' || bio.length > 1000)) {
@@ -72,10 +117,17 @@ const createProfile = async (req, res) => {
       });
     }
 
-    if (experience && (typeof experience !== 'string' || experience.length > 200)) {
+    if (experience && (typeof experience !== 'string' || experience.length > 500)) {
       return res.status(400).json({
         success: false,
-        message: 'Experience description cannot exceed 200 characters',
+        message: 'Experience description cannot exceed 500 characters',
+      });
+    }
+
+    if (education && (typeof education !== 'string' || education.length > 300)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Education description cannot exceed 300 characters',
       });
     }
 
@@ -97,6 +149,20 @@ const createProfile = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Invalid Portfolio URL. Must include http:// or https://',
+      });
+    }
+
+    if (twitter && !isValidUrl(twitter)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid Twitter/X URL. Must include http:// or https://',
+      });
+    }
+
+    if (otherSocial && !isValidUrl(otherSocial)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid Other Social URL. Must include http:// or https://',
       });
     }
 
@@ -132,9 +198,12 @@ const createProfile = async (req, res) => {
       bio: bio ? bio.trim() : '',
       skills: sanitizedSkills,
       experience: experience ? experience.trim() : '',
+      education: education ? education.trim() : '',
       github: github ? github.trim() : '',
       linkedin: linkedin ? linkedin.trim() : '',
       portfolio: portfolio ? portfolio.trim() : '',
+      twitter: twitter ? twitter.trim() : '',
+      otherSocial: otherSocial ? otherSocial.trim() : '',
       availability: selectedAvailability,
     });
 
@@ -206,7 +275,7 @@ const updateMyProfile = async (req, res) => {
       });
     }
 
-    const { bio, skills, experience, github, linkedin, portfolio, availability } = req.body;
+    const { bio, skills, experience, education, github, linkedin, portfolio, twitter, otherSocial, availability } = req.body;
 
     if (bio !== undefined) {
       if (typeof bio !== 'string' || bio.length > 1000) {
@@ -219,13 +288,23 @@ const updateMyProfile = async (req, res) => {
     }
 
     if (experience !== undefined) {
-      if (typeof experience !== 'string' || experience.length > 200) {
+      if (typeof experience !== 'string' || experience.length > 500) {
         return res.status(400).json({
           success: false,
-          message: 'Experience description cannot exceed 200 characters',
+          message: 'Experience description cannot exceed 500 characters',
         });
       }
       profile.experience = experience.trim();
+    }
+
+    if (education !== undefined) {
+      if (typeof education !== 'string' || education.length > 300) {
+        return res.status(400).json({
+          success: false,
+          message: 'Education description cannot exceed 300 characters',
+        });
+      }
+      profile.education = education.trim();
     }
 
     if (skills !== undefined) {
@@ -284,6 +363,26 @@ const updateMyProfile = async (req, res) => {
         });
       }
       profile.portfolio = typeof portfolio === 'string' ? portfolio.trim() : '';
+    }
+
+    if (twitter !== undefined) {
+      if (twitter && !isValidUrl(twitter)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid Twitter/X URL. Must include http:// or https://',
+        });
+      }
+      profile.twitter = typeof twitter === 'string' ? twitter.trim() : '';
+    }
+
+    if (otherSocial !== undefined) {
+      if (otherSocial && !isValidUrl(otherSocial)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid Other Social URL. Must include http:// or https://',
+        });
+      }
+      profile.otherSocial = typeof otherSocial === 'string' ? otherSocial.trim() : '';
     }
 
     await profile.save();
@@ -1387,6 +1486,168 @@ const askDeveloperAIMentor = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/developers/resume
+ * Authenticated DEVELOPER uploads or replaces their resume (PDF/DOC/DOCX up to 10MB)
+ */
+const uploadResume = (req, res) => {
+  uploadResumeMiddleware(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({
+        success: false,
+        message: err.message || 'File upload error',
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No resume file provided',
+      });
+    }
+
+    try {
+      const userId = (req.user?.userId || req.user?.id)?.toString();
+      let profile = await DeveloperProfile.findOne({ user: userId });
+
+      if (!profile) {
+        profile = new DeveloperProfile({
+          user: userId,
+          skills: [],
+          availability: 'AVAILABLE',
+        });
+      }
+
+      // Delete old resume file if exists and is different
+      if (profile.resumeFileName && profile.resumeFileName !== req.file.filename) {
+        const oldPath = path.join(RESUME_UPLOAD_DIR, profile.resumeFileName);
+        if (fs.existsSync(oldPath)) {
+          try {
+            fs.unlinkSync(oldPath);
+          } catch (unlinkErr) {
+            console.warn('Could not delete old resume file:', unlinkErr.message);
+          }
+        }
+      }
+
+      profile.resumeFileName = req.file.filename;
+      profile.resumeOriginalName = req.file.originalname;
+      profile.resumeMimeType = req.file.mimetype;
+      profile.resumeUrl = `/api/developers/resume/${userId}`;
+      profile.resumeUploadedAt = new Date();
+
+      await profile.save();
+      await profile.populate('user', 'name email role');
+
+      return res.status(200).json({
+        success: true,
+        message: 'Resume uploaded successfully',
+        data: formatProfile(profile),
+      });
+    } catch (saveErr) {
+      console.error('Error saving uploaded resume metadata:', saveErr);
+      return res.status(500).json({
+        success: false,
+        message: 'Server error while saving resume metadata',
+      });
+    }
+  });
+};
+
+/**
+ * GET /api/developers/resume/:userId
+ * Securely stream or view a developer's resume.
+ * Authorization rules:
+ * - The developer themselves can access their own resume.
+ * - A founder can view the resume ONLY IF this developer has applied to (JoinRequest) or is a member of (TeamMembership) at least one startup owned by that founder.
+ * - All other users / unauthenticated users are forbidden (403).
+ */
+const getResume = async (req, res) => {
+  try {
+    const targetUserId = req.params.userId;
+    const requesterId = (req.user?.userId || req.user?.id)?.toString();
+    const requesterRole = req.user?.role;
+
+    if (!requesterId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required to access resumes',
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID',
+      });
+    }
+
+    let isAuthorized = false;
+
+    // 1. Is the requester the developer themselves?
+    if (requesterId === targetUserId) {
+      isAuthorized = true;
+    } else if (requesterRole === 'FOUNDER') {
+      // 2. Is the requester a founder whose startup has a join request or membership from this developer?
+      const founderStartups = await Startup.find({ founder: requesterId }).select('_id');
+      const startupIds = founderStartups.map((s) => s._id);
+
+      if (startupIds.length > 0) {
+        const hasJoinRequest = await JoinRequest.exists({
+          startup: { $in: startupIds },
+          developer: targetUserId,
+        });
+
+        const hasMembership = await TeamMembership.exists({
+          startup: { $in: startupIds },
+          user: targetUserId,
+        });
+
+        if (hasJoinRequest || hasMembership) {
+          isAuthorized = true;
+        }
+      }
+    }
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden: You are not authorized to view this developer's resume",
+      });
+    }
+
+    const profile = await DeveloperProfile.findOne({ user: targetUserId });
+    if (!profile || !profile.resumeFileName) {
+      return res.status(404).json({
+        success: false,
+        message: 'Resume not found for this developer',
+      });
+    }
+
+    const filePath = path.join(RESUME_UPLOAD_DIR, profile.resumeFileName);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Resume file not found on server disk',
+      });
+    }
+
+    const mimeType = profile.resumeMimeType || 'application/pdf';
+    const originalName = profile.resumeOriginalName || 'Resume.pdf';
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(originalName)}"`);
+
+    return res.sendFile(filePath);
+  } catch (error) {
+    console.error('Get resume error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while retrieving resume',
+    });
+  }
+};
+
 module.exports = {
   createProfile,
   getMyProfile,
@@ -1398,4 +1659,7 @@ module.exports = {
   getDeveloperFallbackGuidance,
   generateDeveloperAIMentorResponse,
   askDeveloperAIMentor,
+  uploadResume,
+  getResume,
 };
+

@@ -24,6 +24,12 @@ const developerProfileSchema = new mongoose.Schema(
       maxlength: [200, 'Experience description cannot exceed 200 characters'],
       default: '',
     },
+    education: {
+      type: String,
+      trim: true,
+      maxlength: [300, 'Education cannot exceed 300 characters'],
+      default: '',
+    },
     github: {
       type: String,
       trim: true,
@@ -38,6 +44,40 @@ const developerProfileSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: '',
+    },
+    twitter: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    otherSocial: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    resumeUrl: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    resumeFileName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    resumeOriginalName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    resumeMimeType: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    resumeUploadedAt: {
+      type: Date,
+      default: null,
     },
     availability: {
       type: String,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -6,6 +6,7 @@ import {
   createDeveloperProfile,
   updateDeveloperProfile,
   deleteDeveloperProfile,
+  uploadDeveloperResume,
 } from '../../api/developer';
 import { calculateProfileCompletion } from '../../utils/profileCompletion';
 import {
@@ -25,6 +26,11 @@ import {
   ArrowLeft,
   Sparkles,
   Info,
+  GraduationCap,
+  FileText,
+  Upload,
+  RefreshCw,
+  ExternalLink,
 } from 'lucide-react';
 
 const GithubIcon = ({ className = 'w-4 h-4' }) => (
@@ -40,6 +46,12 @@ const GithubIcon = ({ className = 'w-4 h-4' }) => (
 const LinkedinIcon = ({ className = 'w-4 h-4' }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 24 24">
     <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z" />
+  </svg>
+);
+
+const TwitterIcon = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
   </svg>
 );
 
@@ -85,6 +97,7 @@ const AVAILABILITY_OPTIONS = [
 const DeveloperProfilePage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const resumeInputRef = useRef(null);
 
   // Profile data state
   const [profileExists, setProfileExists] = useState(false);
@@ -92,10 +105,20 @@ const DeveloperProfilePage = () => {
   const [skills, setSkills] = useState([]);
   const [skillInput, setSkillInput] = useState('');
   const [experience, setExperience] = useState('');
+  const [education, setEducation] = useState('');
   const [github, setGithub] = useState('');
   const [linkedin, setLinkedin] = useState('');
   const [portfolio, setPortfolio] = useState('');
+  const [twitter, setTwitter] = useState('');
+  const [otherSocial, setOtherSocial] = useState('');
   const [availability, setAvailability] = useState('AVAILABLE');
+
+  // Resume state
+  const [resumeFileName, setResumeFileName] = useState('');
+  const [resumeOriginalName, setResumeOriginalName] = useState('');
+  const [resumeUploadedAt, setResumeUploadedAt] = useState(null);
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const [viewingResume, setViewingResume] = useState(false);
 
   // UI state
   const [loading, setLoading] = useState(true);
@@ -121,10 +144,16 @@ const DeveloperProfilePage = () => {
           setBio(p.bio || '');
           setSkills(Array.isArray(p.skills) ? p.skills : []);
           setExperience(p.experience || '');
+          setEducation(p.education || '');
           setGithub(p.github || '');
           setLinkedin(p.linkedin || '');
           setPortfolio(p.portfolio || '');
+          setTwitter(p.twitter || '');
+          setOtherSocial(p.otherSocial || '');
           setAvailability(p.availability || 'AVAILABLE');
+          setResumeFileName(p.resumeFileName || '');
+          setResumeOriginalName(p.resumeOriginalName || '');
+          setResumeUploadedAt(p.resumeUploadedAt || null);
         }
       } catch (err) {
         if (!isMounted) return;
@@ -149,6 +178,7 @@ const DeveloperProfilePage = () => {
     bio,
     skills,
     experience,
+    education,
     github,
     linkedin,
     portfolio,
@@ -195,9 +225,12 @@ const DeveloperProfilePage = () => {
       bio: bio.trim(),
       skills,
       experience: experience.trim(),
+      education: education.trim(),
       github: github.trim(),
       linkedin: linkedin.trim(),
       portfolio: portfolio.trim(),
+      twitter: twitter.trim(),
+      otherSocial: otherSocial.trim(),
       availability,
     };
 
@@ -220,6 +253,73 @@ const DeveloperProfilePage = () => {
     }
   };
 
+  // Resume upload handler
+  const handleResumeFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validExts = ['.pdf', '.doc', '.docx'];
+    const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    if (!validExts.includes(ext)) {
+      setErrorMessage('Invalid file format. Only PDF, DOC, or DOCX files are allowed.');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMessage('Resume file size cannot exceed 10MB.');
+      return;
+    }
+
+    setUploadingResume(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+    try {
+      const res = await uploadDeveloperResume(file);
+      if (res?.success && res.data) {
+        setProfileExists(true);
+        setResumeFileName(res.data.resumeFileName);
+        setResumeOriginalName(res.data.resumeOriginalName);
+        setResumeUploadedAt(res.data.resumeUploadedAt);
+        setSuccessMessage('Resume uploaded successfully!');
+        setTimeout(() => setSuccessMessage(''), 4000);
+      }
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to upload resume');
+    } finally {
+      setUploadingResume(false);
+      if (resumeInputRef.current) resumeInputRef.current.value = '';
+    }
+  };
+
+  // View own resume authenticated
+  const handleViewResume = async () => {
+    const userId = (user?.userId || user?.id || user?._id)?.toString();
+    if (!userId) return;
+
+    setViewingResume(true);
+    try {
+      const token = localStorage.getItem('sprintfounders_token');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${apiUrl}/developers/resume/${userId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setErrorMessage(errData.message || 'Unable to open resume.');
+        return;
+      }
+
+      const blob = await res.blob();
+      const fileUrl = URL.createObjectURL(blob);
+      window.open(fileUrl, '_blank');
+    } catch (err) {
+      setErrorMessage('Error viewing resume: ' + err.message);
+    } finally {
+      setViewingResume(false);
+    }
+  };
+
   // Delete profile handler
   const handleDeleteProfile = async () => {
     setDeleting(true);
@@ -230,9 +330,14 @@ const DeveloperProfilePage = () => {
       setBio('');
       setSkills([]);
       setExperience('');
+      setEducation('');
       setGithub('');
       setLinkedin('');
       setPortfolio('');
+      setTwitter('');
+      setOtherSocial('');
+      setResumeFileName('');
+      setResumeOriginalName('');
       setAvailability('AVAILABLE');
       setShowDeleteModal(false);
       setSuccessMessage('Developer profile removed successfully.');
@@ -260,107 +365,103 @@ const DeveloperProfilePage = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => navigate('/dashboard')}
-              className="p-2 rounded-xl border border-[#232735] bg-[#11141C] hover:bg-[#171A24] text-slate-400 hover:text-white transition"
+              className="p-2 rounded-xl bg-[#171A24] border border-[#2A2F42] text-slate-400 hover:text-white transition"
               title="Back to Dashboard"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4" />
             </button>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-                Developer Profile
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-                Manage your developer credentials, technical skills, and availability
+              <h1 className="text-2xl font-black text-white tracking-tight">Developer Profile</h1>
+              <p className="text-xs text-slate-400">
+                Showcase your skills, department focus, experience, and resume to startup founders.
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <span
-              className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
+              className={`text-xs font-semibold px-3 py-1 rounded-full border ${
                 profileExists
                   ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60'
                   : 'bg-amber-950/60 text-amber-400 border-amber-800/60'
               }`}
             >
-              {profileExists ? 'Profile Active' : 'Profile Not Created'}
+              {profileExists ? 'Profile Active' : 'Draft / New Profile'}
             </span>
           </div>
         </div>
 
         {/* Feedback Alerts */}
-        {successMessage && (
-          <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-800/50 flex items-center gap-3 text-sm text-emerald-300 shadow-xl">
-            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
-            <span className="font-medium">{successMessage}</span>
-          </div>
-        )}
-
         {errorMessage && (
-          <div className="p-4 rounded-2xl bg-red-950/40 border border-red-800/50 flex items-center gap-3 text-sm text-red-300 shadow-xl">
-            <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
-            <span className="font-medium">{errorMessage}</span>
+          <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/60 flex items-start gap-3 text-sm text-red-300 shadow-md animate-fadeIn">
+            <AlertCircle className="w-5 h-5 shrink-0 text-red-400 mt-0.5" />
+            <div className="flex-1">
+              <span className="font-semibold block mb-0.5">Submission Error</span>
+              <span>{errorMessage}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setErrorMessage('')}
+              className="text-red-400 hover:text-red-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
 
-        {/* Live Completion Bar Card */}
-        <div className="bg-[#11141C] rounded-2xl border border-[#232735] p-5 sm:p-6 shadow-xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-indigo-400" />
-              <h2 className="text-sm font-bold text-white">Profile Completion</h2>
-              <span className="text-xs font-semibold text-slate-600">•</span>
-              <span className="text-xs text-slate-400 font-medium">Deterministic Score</span>
+        {successMessage && (
+          <div className="p-4 rounded-xl bg-emerald-950/40 border border-emerald-800/60 flex items-start gap-3 text-sm text-emerald-300 shadow-md animate-fadeIn">
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400 mt-0.5" />
+            <div className="flex-1">
+              <span className="font-semibold block mb-0.5">Success</span>
+              <span>{successMessage}</span>
             </div>
+            <button
+              type="button"
+              onClick={() => setSuccessMessage('')}
+              className="text-emerald-400 hover:text-emerald-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Profile Completion Meter */}
+        <div className="bg-[#11141C] rounded-2xl border border-[#232735] p-5 shadow-xl space-y-3">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-lg font-black text-indigo-400">
-                {completion.percentage}%
-              </span>
-              <span className="text-xs text-slate-400 font-medium">
-                {completion.isComplete ? 'Complete' : 'In Progress'}
+              <Sparkles className="w-4 h-4 text-indigo-400" />
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                Profile Completeness
               </span>
             </div>
+            <span className="text-sm font-extrabold text-indigo-400">{completion.percentage}%</span>
           </div>
 
-          {/* Progress bar */}
-          <div className="w-full bg-[#0B0D12] rounded-full h-3 overflow-hidden border border-[#232735]">
+          <div className="w-full h-2 rounded-full bg-[#171A24] overflow-hidden">
             <div
-              className={`h-full transition-all duration-500 rounded-full ${
-                completion.percentage === 100
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
-                  : 'bg-gradient-to-r from-indigo-500 to-violet-500'
-              }`}
+              className="h-full bg-gradient-to-r from-indigo-500 to-sky-400 rounded-full transition-all duration-500"
               style={{ width: `${completion.percentage}%` }}
             />
           </div>
 
-          {/* Missing fields breakdown if not 100% */}
           {completion.missingFields.length > 0 && (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
-              <span className="font-semibold text-slate-300">Pending items:</span>
-              {completion.missingFields.map((field) => (
-                <span
-                  key={field}
-                  className="px-2 py-0.5 rounded-md bg-[#171A24] text-slate-300 border border-[#2A2F42] font-medium"
-                >
-                  +{field === 'Skills' ? '20%' : field === 'Bio' || field === 'Experience' ? '15%' : '10%'} {field}
-                </span>
-              ))}
-            </div>
+            <p className="text-[11px] text-slate-400">
+              <span className="text-slate-300 font-semibold">Recommended to complete: </span>
+              {completion.missingFields.join(', ')}
+            </p>
           )}
         </div>
 
-        {/* Main Profile Form */}
+        {/* Main Form */}
         <form onSubmit={handleSaveProfile} className="space-y-6">
-          {/* Identity Info (Read-Only from User) */}
-          <div className="bg-[#11141C] rounded-2xl border border-[#232735] p-6 shadow-xl">
-            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#232735]">
+          {/* User Account Info (Read-Only) */}
+          <div className="bg-[#11141C] rounded-2xl border border-[#232735] p-6 shadow-xl space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-[#232735]">
               <User className="w-5 h-5 text-indigo-400" />
-              <h2 className="text-base font-bold text-white">User Identity</h2>
-              <span className="ml-auto text-xs text-slate-500 flex items-center gap-1">
-                <Info className="w-3.5 h-3.5" /> Read-only from account
-              </span>
+              <h2 className="text-base font-bold text-white">Account Details</h2>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -368,32 +469,137 @@ const DeveloperProfilePage = () => {
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
                   Full Name
                 </label>
-                <div className="flex items-center gap-2.5 px-4 py-2.5 bg-[#171A24] border border-[#2A2F42] rounded-xl text-sm font-semibold text-slate-200">
-                  <User className="w-4 h-4 text-slate-500" />
-                  <span>{user?.name || 'Developer'}</span>
-                </div>
+                <input
+                  type="text"
+                  disabled
+                  value={user?.name || ''}
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#2A2F42] bg-[#171A24]/60 text-slate-300 text-sm cursor-not-allowed opacity-80"
+                />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
                   Email Address
                 </label>
-                <div className="flex items-center gap-2.5 px-4 py-2.5 bg-[#171A24] border border-[#2A2F42] rounded-xl text-sm font-semibold text-slate-200">
-                  <Mail className="w-4 h-4 text-slate-500" />
-                  <span className="truncate">{user?.email || 'developer@sprintfounders.com'}</span>
-                </div>
+                <input
+                  type="email"
+                  disabled
+                  value={user?.email || ''}
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#2A2F42] bg-[#171A24]/60 text-slate-300 text-sm cursor-not-allowed opacity-80"
+                />
               </div>
             </div>
           </div>
 
-          {/* Availability Status */}
-          <div className="bg-[#11141C] rounded-2xl border border-[#232735] p-6 shadow-xl">
-            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#232735]">
-              <Clock className="w-5 h-5 text-indigo-400" />
-              <h2 className="text-base font-bold text-white">Availability</h2>
+          {/* ====================================================
+              FEATURE 7 — RESUME UPLOAD SECTION
+              ==================================================== */}
+          <div className="bg-[#11141C] rounded-2xl border border-[#232735] p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#232735]">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-400" />
+                <div>
+                  <h2 className="text-base font-bold text-white">Developer Resume</h2>
+                  <p className="text-xs text-slate-400">PDF preferred, DOC/DOCX supported (up to 10MB)</p>
+                </div>
+              </div>
+
+              {resumeFileName && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">
+                  Uploaded
+                </span>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Hidden native file input */}
+            <input
+              type="file"
+              ref={resumeInputRef}
+              onChange={handleResumeFileChange}
+              accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              className="hidden"
+            />
+
+            {resumeFileName ? (
+              <div className="p-4 rounded-xl bg-[#171A24] border border-[#2A2F42] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-950/60 text-rose-400 border border-indigo-800/60 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      {resumeOriginalName || 'Resume.pdf'}
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      {resumeUploadedAt
+                        ? `Uploaded ${new Date(resumeUploadedAt).toLocaleDateString()}`
+                        : 'Uploaded to your profile'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    disabled={viewingResume}
+                    onClick={handleViewResume}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-sm transition cursor-pointer"
+                  >
+                    {viewingResume ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    )}
+                    <span>View</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={uploadingResume}
+                    onClick={() => resumeInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 bg-[#11141C] hover:bg-[#1A1E2B] border border-[#2A2F42] transition cursor-pointer"
+                  >
+                    {uploadingResume ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    )}
+                    <span>Replace</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 rounded-xl bg-[#171A24]/60 border border-dashed border-[#2A2F42] hover:border-indigo-500/50 transition text-center space-y-3">
+                <Upload className="w-8 h-8 text-indigo-400 mx-auto" />
+                <div>
+                  <p className="text-xs font-semibold text-white">
+                    No resume uploaded yet
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Upload your resume so founders can evaluate your background when you apply.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={uploadingResume}
+                  onClick={() => resumeInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/20 transition cursor-pointer"
+                >
+                  {uploadingResume && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Upload Resume</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Availability Status */}
+          <div className="bg-[#11141C] rounded-2xl border border-[#232735] p-6 shadow-xl space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-[#232735]">
+              <Clock className="w-5 h-5 text-indigo-400" />
+              <h2 className="text-base font-bold text-white">Availability Status</h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
               {AVAILABILITY_OPTIONS.map((opt) => {
                 const isSelected = availability === opt.value;
                 return (
@@ -401,51 +607,41 @@ const DeveloperProfilePage = () => {
                     key={opt.value}
                     type="button"
                     onClick={() => setAvailability(opt.value)}
-                    className={`p-4 rounded-xl border text-left transition relative flex flex-col justify-between ${
+                    className={`p-4 rounded-xl border text-left transition relative cursor-pointer ${
                       isSelected
-                        ? 'border-indigo-500 bg-indigo-950/40 ring-1 ring-indigo-500/50'
-                        : 'border-[#2A2F42] bg-[#171A24] hover:border-[#373E54] hover:bg-[#1E2330]'
+                        ? 'border-indigo-500 bg-indigo-950/20 shadow-md shadow-indigo-500/10'
+                        : 'border-[#2A2F42] bg-[#171A24] hover:border-[#3E4560]'
                     }`}
                   >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-sm font-bold text-white">{opt.label}</span>
-                        <span className={`w-2.5 h-2.5 rounded-full ${opt.indicatorColor}`} />
-                      </div>
-                      <p className="text-xs text-slate-400 leading-relaxed">{opt.description}</p>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`w-2.5 h-2.5 rounded-full ${opt.indicatorColor}`} />
+                      <span className="text-xs font-bold text-white">{opt.label}</span>
                     </div>
-                    {isSelected && (
-                      <div className="mt-3 flex items-center gap-1 text-[11px] font-bold text-indigo-400">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Selected</span>
-                      </div>
-                    )}
+                    <p className="text-[11px] text-slate-400 leading-snug">{opt.description}</p>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Skills Chip/Tag Manager */}
-          <div className="bg-[#11141C] rounded-2xl border border-[#232735] p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#232735]">
+          {/* Technical Skills */}
+          <div className="bg-[#11141C] rounded-2xl border border-[#232735] p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#232735]">
               <div className="flex items-center gap-2">
                 <Code2 className="w-5 h-5 text-indigo-400" />
-                <h2 className="text-base font-bold text-white">Technical Skills</h2>
+                <h2 className="text-base font-bold text-white">Skills & Technologies</h2>
               </div>
-              <span className="text-xs font-semibold text-slate-400">
-                {skills.length} / 50 skills
-              </span>
+              <span className="text-xs text-slate-400 font-medium">{skills.length} / 50 skills</span>
             </div>
 
-            {/* Input to add skill */}
-            <div className="flex gap-2 mb-4">
+            {/* Input field */}
+            <div className="flex gap-2">
               <input
                 type="text"
                 value={skillInput}
                 onChange={(e) => setSkillInput(e.target.value)}
                 onKeyDown={handleKeyDownSkill}
-                placeholder="Type a skill (e.g. React, Node.js, GraphQL) and press Enter"
+                placeholder="Type a skill and press Enter (e.g. Next.js, GraphQL, PostgreSQL)..."
                 className="flex-1 px-4 py-2.5 rounded-xl border border-[#2A2F42] bg-[#171A24] text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 placeholder:text-slate-500"
               />
               <button
@@ -508,11 +704,11 @@ const DeveloperProfilePage = () => {
             </div>
           </div>
 
-          {/* Professional Experience & Bio */}
+          {/* Professional Experience, Education & Bio */}
           <div className="bg-[#11141C] rounded-2xl border border-[#232735] p-6 shadow-xl space-y-5">
             <div className="flex items-center gap-2 pb-3 border-b border-[#232735]">
               <Briefcase className="w-5 h-5 text-indigo-400" />
-              <h2 className="text-base font-bold text-white">Experience & Bio</h2>
+              <h2 className="text-base font-bold text-white">Experience & Background</h2>
             </div>
 
             {/* Experience */}
@@ -524,20 +720,40 @@ const DeveloperProfilePage = () => {
                 type="text"
                 value={experience}
                 onChange={(e) => setExperience(e.target.value)}
-                maxLength={200}
-                placeholder="e.g. 3-5 years building production SaaS & full-stack web applications"
+                maxLength={500}
+                placeholder="e.g. 4 years in production TypeScript, distributed systems, and real-time architectures"
                 className="w-full px-4 py-2.5 rounded-xl border border-[#2A2F42] bg-[#171A24] text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 placeholder:text-slate-500"
               />
               <div className="flex items-center justify-between mt-1 text-xs text-slate-500">
-                <span>Brief summary of your seniority or track record</span>
-                <span>{experience.length} / 200</span>
+                <span>Seniority, technical specialization, or past company experience</span>
+                <span>{experience.length} / 500</span>
+              </div>
+            </div>
+
+            {/* Education */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <GraduationCap className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Education / Certifications</span>
+              </label>
+              <input
+                type="text"
+                value={education}
+                onChange={(e) => setEducation(e.target.value)}
+                maxLength={300}
+                placeholder="e.g. B.Tech Computer Science, Self-taught engineer, AWS Certified Solutions Architect"
+                className="w-full px-4 py-2.5 rounded-xl border border-[#2A2F42] bg-[#171A24] text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 placeholder:text-slate-500"
+              />
+              <div className="flex items-center justify-between mt-1 text-xs text-slate-500">
+                <span>Degree, institution, or self-directed learning journey</span>
+                <span>{education.length} / 300</span>
               </div>
             </div>
 
             {/* Bio */}
             <div>
               <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-                Bio & Engineering Philosophy
+                Bio & Professional Summary
               </label>
               <textarea
                 rows={4}
@@ -558,10 +774,10 @@ const DeveloperProfilePage = () => {
           <div className="bg-[#11141C] rounded-2xl border border-[#232735] p-6 shadow-xl space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-[#232735]">
               <Globe className="w-5 h-5 text-indigo-400" />
-              <h2 className="text-base font-bold text-white">Links & Profiles</h2>
+              <h2 className="text-base font-bold text-white">Links & Online Profiles</h2>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* GitHub */}
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
@@ -618,6 +834,44 @@ const DeveloperProfilePage = () => {
                   />
                 </div>
               </div>
+
+              {/* Twitter / X */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                  Twitter / X Profile
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                    <TwitterIcon className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="url"
+                    value={twitter}
+                    onChange={(e) => setTwitter(e.target.value)}
+                    placeholder="https://x.com/username"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#2A2F42] bg-[#171A24] text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              {/* Other Social Link */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                  Other Link / Blog
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="url"
+                    value={otherSocial}
+                    onChange={(e) => setOtherSocial(e.target.value)}
+                    placeholder="https://medium.com/@username"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#2A2F42] bg-[#171A24] text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -628,7 +882,7 @@ const DeveloperProfilePage = () => {
                 <button
                   type="button"
                   onClick={() => setShowDeleteModal(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-950/30 border border-red-800/40 transition"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-red-400 hover:text-red-300 hover:bg-red-950/30 border border-red-800/40 transition cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>Delete Profile</span>
@@ -640,14 +894,14 @@ const DeveloperProfilePage = () => {
               <button
                 type="button"
                 onClick={() => navigate('/dashboard')}
-                className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-300 hover:text-white bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] transition"
+                className="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-300 hover:text-white bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] transition cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/20 disabled:opacity-50 transition"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-600/20 disabled:opacity-50 transition cursor-pointer"
               >
                 {saving ? (
                   <>
@@ -657,7 +911,7 @@ const DeveloperProfilePage = () => {
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    <span>{profileExists ? 'Save Changes' : 'Create Profile'}</span>
+                    <span>Save Profile</span>
                   </>
                 )}
               </button>
@@ -665,42 +919,38 @@ const DeveloperProfilePage = () => {
           </div>
         </form>
 
-        {/* Delete Confirmation Modal */}
+        {/* Delete Modal */}
         {showDeleteModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
             <div className="bg-[#11141C] rounded-2xl border border-[#232735] max-w-md w-full p-6 shadow-2xl space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-red-950/50 border border-red-800/50 text-red-400 flex items-center justify-center">
-                <Trash2 className="w-6 h-6" />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-950/60 text-red-400 border border-red-800/60 flex items-center justify-center shrink-0">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Delete Profile?</h3>
+                  <p className="text-xs text-slate-400">
+                    This will remove your public developer profile and resume.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">Delete Developer Profile?</h3>
-                <p className="text-sm text-slate-400 mt-1 leading-relaxed">
-                  This will remove your developer profile information, skills, and links. Your account credentials will remain intact. You can recreate a profile at any time.
-                </p>
-              </div>
-              <div className="flex items-center justify-end gap-3 pt-2">
+
+              <div className="pt-2 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setShowDeleteModal(false)}
-                  disabled={deleting}
-                  className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 hover:bg-[#171A24] border border-[#2A2F42] transition"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-[#171A24] border border-[#2A2F42] transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={handleDeleteProfile}
                   disabled={deleting}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-500 transition shadow-lg shadow-red-600/20"
+                  onClick={handleDeleteProfile}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-red-600 hover:bg-red-500 transition"
                 >
-                  {deleting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Deleting...</span>
-                    </>
-                  ) : (
-                    <span>Confirm Delete</span>
-                  )}
+                  {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Confirm Delete</span>
                 </button>
               </div>
             </div>

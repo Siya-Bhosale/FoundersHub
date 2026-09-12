@@ -15,9 +15,12 @@ export const createDeveloperProfile = async (profileData) => {
     bio: profileData.bio || '',
     skills: Array.isArray(profileData.skills) ? profileData.skills : [],
     experience: profileData.experience || '',
+    education: profileData.education || '',
     github: profileData.github || '',
     linkedin: profileData.linkedin || '',
     portfolio: profileData.portfolio || '',
+    twitter: profileData.twitter || '',
+    otherSocial: profileData.otherSocial || '',
     availability: profileData.availability || 'AVAILABLE',
   };
 
@@ -35,15 +38,31 @@ export const updateDeveloperProfile = async (profileData) => {
     bio: profileData.bio !== undefined ? profileData.bio : '',
     skills: Array.isArray(profileData.skills) ? profileData.skills : [],
     experience: profileData.experience !== undefined ? profileData.experience : '',
+    education: profileData.education !== undefined ? profileData.education : '',
     github: profileData.github !== undefined ? profileData.github : '',
     linkedin: profileData.linkedin !== undefined ? profileData.linkedin : '',
     portfolio: profileData.portfolio !== undefined ? profileData.portfolio : '',
+    twitter: profileData.twitter !== undefined ? profileData.twitter : '',
+    otherSocial: profileData.otherSocial !== undefined ? profileData.otherSocial : '',
     availability: profileData.availability || 'AVAILABLE',
   };
 
   return await apiClient('/developers/profile', {
     method: 'PUT',
     body: JSON.stringify(payload),
+  });
+};
+
+/**
+ * Upload developer resume file (PDF, DOC, DOCX up to 10MB)
+ */
+export const uploadDeveloperResume = async (file) => {
+  const formData = new FormData();
+  formData.append('resume', file);
+
+  return await apiClient('/developers/resume', {
+    method: 'POST',
+    body: formData,
   });
 };
 

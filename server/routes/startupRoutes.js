@@ -8,7 +8,13 @@ const {
   getAllStartups,
 } = require('../controllers/startupController');
 const { getStartupJoinRequests, createJoinRequest } = require('../controllers/joinRequestController');
-const { getStartupTeam } = require('../controllers/teamController');
+const { getStartupTeam, updateMemberDepartment } = require('../controllers/teamController');
+const {
+  getStartupDepartments,
+  createDepartment,
+  updateDepartment,
+  deleteDepartment,
+} = require('../controllers/departmentController');
 const { createTask, getStartupTasks } = require('../controllers/taskController');
 const { getStartupFundingInterests } = require('../controllers/fundingInterestController');
 const authMiddleware = require('../middleware/authMiddleware');
@@ -37,14 +43,23 @@ router.put('/:id', updateStartup);
 // DELETE /api/startups/:id (Delete startup - owner only)
 router.delete('/:id', deleteStartup);
 
+// Departments under startup
+router.get('/:startupId/departments', getStartupDepartments);
+router.post('/:startupId/departments', requireRole('FOUNDER'), createDepartment);
+router.put('/:startupId/departments/:departmentId', requireRole('FOUNDER'), updateDepartment);
+router.delete('/:startupId/departments/:departmentId', requireRole('FOUNDER'), deleteDepartment);
+
 // Join Requests under startup
 // GET /api/startups/:startupId/join-requests (Only FOUNDER can view requests for their startup)
 router.get('/:startupId/join-requests', requireRole('FOUNDER'), getStartupJoinRequests);
 // POST /api/startups/:startupId/join-requests (Only DEVELOPER can submit join request)
 router.post('/:startupId/join-requests', requireRole('DEVELOPER'), createJoinRequest);
 
+// Team under startup
 // GET /api/startups/:startupId/team (Founder or active team members can view startup team)
 router.get('/:startupId/team', getStartupTeam);
+// PUT /api/startups/:startupId/team/:membershipId/department (Founder can move member between departments)
+router.put('/:startupId/team/:membershipId/department', requireRole('FOUNDER'), updateMemberDepartment);
 
 // Tasks under startup
 router.post('/:startupId/tasks', createTask);

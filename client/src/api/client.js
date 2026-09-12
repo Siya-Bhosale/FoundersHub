@@ -4,10 +4,13 @@ export const apiClient = async (endpoint, options = {}) => {
   const token = localStorage.getItem('sprintfounders_token');
 
   const headers = {
-    'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
+
+  if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   let body = options.body;
   if (body !== undefined && body !== null) {
