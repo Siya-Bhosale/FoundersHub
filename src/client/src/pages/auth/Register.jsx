@@ -88,13 +88,14 @@ const Register = () => {
       <div className="max-w-md w-full">
         {/* Card Header */}
         <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white mx-auto shadow-lg shadow-indigo-600/20 mb-4">
-            <Rocket className="w-6 h-6" />
-          </div>
+          <img src="/assets/foundershub-logo.png" alt="FoundersHub" className="h-16 w-auto mx-auto mb-4 object-contain" />
           <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-            Join SprintFounders
+            FoundersHub
           </h2>
-          <p className="mt-2 text-sm text-slate-400">
+          <p className="mt-2 font-medium text-indigo-400 uppercase tracking-widest text-sm">
+            Found to Build
+          </p>
+          <p className="mt-4 text-sm text-slate-400">
             Create an account to start building, investing, or collaborating.
           </p>
         </div>

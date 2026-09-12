@@ -3,7 +3,7 @@ import { Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Loader2, ShieldAlert, ArrowLeft } from 'lucide-react';
 
-const ProtectedRoute = ({ children, allowedRoles }) => {
+const ProtectedRoute = ({ children, allowedRoles, message }) => {
   const { isAuthenticated, user, loading } = useAuth();
   const location = useLocation();
 
@@ -23,6 +23,13 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   const userRole = user?.role?.toUpperCase();
   const normalizedAllowed = allowedRoles?.map((r) => r.toUpperCase());
   if (normalizedAllowed && normalizedAllowed.length > 0 && !normalizedAllowed.includes(userRole)) {
+    const isFounderOnly = normalizedAllowed.length === 1 && normalizedAllowed.includes('FOUNDER');
+    const displayMessage =
+      message ||
+      (isFounderOnly
+        ? 'This management feature is reserved for Founder accounts.'
+        : `You do not have permission to access this page with your current account role (${userRole || 'User'}).`);
+
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-[#0B0D12]">
         <div className="max-w-md w-full bg-[#11141C] p-8 rounded-2xl border border-[#232735] shadow-xl text-center">
@@ -31,7 +38,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
           </div>
           <h2 className="text-xl font-bold text-[#F3F4F6] mb-2">Access Restricted</h2>
           <p className="text-sm text-[#94A3B8] mb-6 leading-relaxed">
-            You don't have permission to perform this action. Startup creation and editing are strictly reserved for Founder accounts.
+            {displayMessage}
           </p>
           <Link
             to="/dashboard"

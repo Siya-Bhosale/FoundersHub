@@ -40,8 +40,8 @@ const Landing = () => {
 
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-950/60 border border-indigo-800/60 text-indigo-400 text-xs font-semibold">
-            <Rocket className="w-3.5 h-3.5 text-indigo-400" />
-            <span>SprintFounders • From Idea → Execution → Funding</span>
+            <img src="/assets/foundershub-logo.png" alt="FoundersHub" className="w-4 h-4 object-contain" />
+            <span>FoundersHub • FOUND TO BUILD</span>
           </div>
 
           <h1 className="text-4xl sm:text-6xl font-extrabold text-white tracking-tight leading-tight sm:leading-none max-w-4xl mx-auto">
@@ -140,7 +140,7 @@ const Landing = () => {
               Tailored Workspaces for Every Role
             </h2>
             <p className="text-slate-400 text-xs sm:text-sm">
-              Whether you are pitching an idea, writing code, or allocating capital, SprintFounders powers your workflow.
+              Whether you are pitching an idea, writing code, or allocating capital, FoundersHub powers your workflow.
             </p>
           </div>
 

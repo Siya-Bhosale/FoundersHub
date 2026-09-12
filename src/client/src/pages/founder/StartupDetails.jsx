@@ -43,6 +43,7 @@ import {
   Activity,
   Handshake,
   TrendingUp,
+  MessageSquare,
 } from 'lucide-react';
 
 const formatCurrency = (val) => {
@@ -386,10 +387,18 @@ const StartupDetails = () => {
                 </span>
               )}
               {developerJoinStatus === 'ACCEPTED' && (
-                <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-950/50 text-emerald-400 border border-emerald-800/50">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>You are on the team.</span>
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-950/50 text-emerald-400 border border-emerald-800/50">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>You are on the team</span>
+                  </span>
+                  <Link
+                    to={`/developer/startups/${startup.id}`}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/20 transition"
+                  >
+                    <span>Open Developer Workspace</span>
+                  </Link>
+                </div>
               )}
             </div>
           )}
@@ -570,85 +579,163 @@ const StartupDetails = () => {
               Quick Actions (Open Dedicated Tool)
             </span>
             <div className="flex flex-wrap items-center gap-2.5">
-              <Link
-                to={`/tasks/${startup.id}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/20 transition"
-              >
-                <SquareCheck className="w-3.5 h-3.5" />
-                <span>Tasks (Kanban)</span>
-              </Link>
+              {userRole === 'DEVELOPER' ? (
+                <>
+                  <Link
+                    to={`/developer/startups/${startup.id}/tasks`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/20 transition"
+                  >
+                    <SquareCheck className="w-3.5 h-3.5" />
+                    <span>My Tasks</span>
+                  </Link>
 
-              <Link
-                to={`/sprint-planner/${startup.id}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
-              >
-                <ListChecks className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Sprint Planner</span>
-              </Link>
+                  <Link
+                    to={`/developer/startups/${startup.id}/chat`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Department Chat</span>
+                  </Link>
 
-              <Link
-                to={`/execution/${startup.id}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
-              >
-                <Activity className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Execution Intelligence</span>
-              </Link>
+                  <Link
+                    to={`/developer/startups/${startup.id}/team`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <Users className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Team & Departments</span>
+                  </Link>
 
-              <Link
-                to={`/risk-analysis/${startup.id}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                <span>Risk Analysis</span>
-              </Link>
+                  <Link
+                    to={`/developer/startups/${startup.id}/execution`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Execution</span>
+                  </Link>
 
-              <Link
-                to={`/finance/${startup.id}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
-              >
-                <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Finance</span>
-              </Link>
+                  <Link
+                    to={`/developer/startups/${startup.id}/sprint`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <ListChecks className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Sprint</span>
+                  </Link>
 
-              <Link
-                to={`/ai-analyzer/${startup.id}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-                <span>Startup Analyzer</span>
-              </Link>
+                  <Link
+                    to={`/developer/startups/${startup.id}/ai-mentor`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <Bot className="w-3.5 h-3.5 text-violet-400" />
+                    <span>AI Mentor</span>
+                  </Link>
 
-              <Link
-                to={`/pitch/${startup.id}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
-              >
-                <Presentation className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Pitch Deck</span>
-              </Link>
+                  <Link
+                    to={`/developer/startups/${startup.id}/analyzer`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+                    <span>Startup Analyzer</span>
+                  </Link>
 
-              <Link
-                to={`/ai-mentor/${startup.id}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
-              >
-                <Bot className="w-3.5 h-3.5 text-violet-400" />
-                <span>AI Mentor</span>
-              </Link>
+                  <Link
+                    to={`/developer/startups/${startup.id}/risk-analysis`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Risk Analysis</span>
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to={`/tasks/${startup.id}`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/20 transition"
+                  >
+                    <SquareCheck className="w-3.5 h-3.5" />
+                    <span>Tasks (Kanban)</span>
+                  </Link>
 
-              <Link
-                to={`/team/${startup.id}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
-              >
-                <Users className="w-3.5 h-3.5 text-sky-400" />
-                <span>Team</span>
-              </Link>
+                  <Link
+                    to={`/sprint-planner/${startup.id}`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <ListChecks className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Sprint Planner</span>
+                  </Link>
 
-              <Link
-                to={`/funding-interest/${startup.id}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
-              >
-                <Handshake className="w-3.5 h-3.5 text-amber-400" />
-                <span>Investor Interest</span>
-              </Link>
+                  <Link
+                    to={`/execution/${startup.id}`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Execution Intelligence</span>
+                  </Link>
+
+                  <Link
+                    to={`/risk-analysis/${startup.id}`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Risk Analysis</span>
+                  </Link>
+
+                  <Link
+                    to={`/finance/${startup.id}`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Finance</span>
+                  </Link>
+
+                  <Link
+                    to={`/ai-analyzer/${startup.id}`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+                    <span>Startup Analyzer</span>
+                  </Link>
+
+                  <Link
+                    to={`/pitch/${startup.id}`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <Presentation className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Pitch Deck</span>
+                  </Link>
+
+                  <Link
+                    to={`/ai-mentor/${startup.id}`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <Bot className="w-3.5 h-3.5 text-violet-400" />
+                    <span>AI Mentor</span>
+                  </Link>
+
+                  <Link
+                    to={`/team/${startup.id}`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <Users className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Team</span>
+                  </Link>
+
+                  <Link
+                    to={`/startups/${startup.id}/chat`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Department Chat</span>
+                  </Link>
+
+                  <Link
+                    to={`/funding-interest/${startup.id}`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-300 bg-[#171A24] border border-[#2A2F42] hover:bg-[#1E2330] hover:text-white transition shadow-sm"
+                  >
+                    <Handshake className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Investor Interest</span>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

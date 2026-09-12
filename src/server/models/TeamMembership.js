@@ -45,5 +45,6 @@ const teamMembershipSchema = new mongoose.Schema(
 
 // Enforce unique membership per startup + user
 teamMembershipSchema.index({ startup: 1, user: 1 }, { unique: true });
+teamMembershipSchema.index({ startup: 1, department: 1 });
 
 module.exports = mongoose.model('TeamMembership', teamMembershipSchema);

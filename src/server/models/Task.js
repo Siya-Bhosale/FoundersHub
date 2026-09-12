@@ -58,6 +58,11 @@ const taskSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    department: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Department',
+      default: null,
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -72,6 +77,11 @@ const taskSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Performance compound indexes
+taskSchema.index({ startup: 1, department: 1 });
+taskSchema.index({ startup: 1, assignedTo: 1 });
+taskSchema.index({ startup: 1, status: 1 });
 
 // Auto-populate or update completedAt before saving
 taskSchema.pre('save', function () {

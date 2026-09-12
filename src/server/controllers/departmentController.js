@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Department = require('../models/Department');
 const Startup = require('../models/Startup');
 const TeamMembership = require('../models/TeamMembership');
+const Chat = require('../models/Chat');
 
 const DEFAULT_DEPARTMENTS = [
   { name: 'Technical', description: 'Core architecture, backend systems, and infrastructure' },
@@ -11,6 +12,8 @@ const DEFAULT_DEPARTMENTS = [
   { name: 'Sales', description: 'Business development, client outreach, and revenue' },
   { name: 'Finance', description: 'Capital allocation, accounting, and unit economics' },
   { name: 'Operations', description: 'Delivery execution, project agility, and resources' },
+  { name: 'Product', description: 'Product strategy, roadmap planning, and user research' },
+  { name: 'Customer Support', description: 'Customer success, issue resolution, and client support' },
 ];
 
 /**
@@ -30,6 +33,7 @@ const isStartupFounder = async (startupId, userId) => {
 
 /**
  * GET /api/startups/:startupId/departments
+ * or GET /api/departments/startup/:startupId
  * Retrieve all departments for a startup (auto-seeds defaults if none exist)
  */
 const getStartupDepartments = async (req, res) => {
@@ -46,24 +50,54 @@ const getStartupDepartments = async (req, res) => {
     }
 
     let departments = await Department.find({ startup: startupId }).sort({ createdAt: 1 });
+    const founderId = (startup.founder?._id || startup.founder || startup.founderId)?.toString();
 
-    // If startup has 0 departments, auto-seed defaults
+    // Auto-seed all default departments if none exist or seed any missing defaults
     if (departments.length === 0) {
-      const founderId = (startup.founder?._id || startup.founder || startup.founderId)?.toString();
       const docsToInsert = DEFAULT_DEPARTMENTS.map((d) => ({
         startup: startupId,
         name: d.name,
         description: d.description,
+        isDefault: true,
         createdBy: founderId && mongoose.Types.ObjectId.isValid(founderId) ? founderId : null,
       }));
 
       try {
         await Department.insertMany(docsToInsert, { ordered: false });
-        departments = await Department.find({ startup: startupId }).sort({ createdAt: 1 });
       } catch (seedErr) {
-        // In case of parallel race condition
-        departments = await Department.find({ startup: startupId }).sort({ createdAt: 1 });
+        // Race condition fallback
       }
+      departments = await Department.find({ startup: startupId }).sort({ createdAt: 1 });
+    } else {
+      // Ensure missing defaults (e.g., Product, Customer Support) are added if startup was seeded with older defaults
+      const existingNames = new Set(departments.map((d) => d.name.toLowerCase()));
+      const missingDefaults = DEFAULT_DEPARTMENTS.filter((d) => !existingNames.has(d.name.toLowerCase()));
+      if (missingDefaults.length > 0) {
+        const missingDocs = missingDefaults.map((d) => ({
+          startup: startupId,
+          name: d.name,
+          description: d.description,
+          isDefault: true,
+          createdBy: founderId && mongoose.Types.ObjectId.isValid(founderId) ? founderId : null,
+        }));
+        try {
+          await Department.insertMany(missingDocs, { ordered: false });
+          departments = await Department.find({ startup: startupId }).sort({ createdAt: 1 });
+        } catch (e) {
+          // ignore duplicate race condition
+        }
+      }
+    }
+
+    // Automatically ensure private department group chat exists for each department
+    for (const dept of departments) {
+      try {
+        await Chat.updateOne(
+          { startup: startupId, department: dept._id, type: 'DEPARTMENT' },
+          { $setOnInsert: { name: `${dept.name} Team Chat`, type: 'DEPARTMENT' } },
+          { upsert: true }
+        );
+      } catch (chatErr) {}
     }
 
     // Attach active member count to each department
@@ -89,16 +123,22 @@ const getStartupDepartments = async (req, res) => {
       countMap[c._id.toString()] = c.count;
     });
 
-    const formattedDepartments = departments.map((d) => ({
-      id: d._id.toString(),
-      _id: d._id.toString(),
-      startup: d.startup.toString(),
-      name: d.name,
-      description: d.description || '',
-      memberCount: countMap[d._id.toString()] || 0,
-      createdAt: d.createdAt,
-      updatedAt: d.updatedAt,
-    }));
+    const defaultNamesSet = new Set(DEFAULT_DEPARTMENTS.map((d) => d.name.toLowerCase()));
+
+    const formattedDepartments = departments.map((d) => {
+      const isDefault = Boolean(d.isDefault || defaultNamesSet.has(d.name.toLowerCase()));
+      return {
+        id: d._id.toString(),
+        _id: d._id.toString(),
+        startup: d.startup.toString(),
+        name: d.name,
+        description: d.description || '',
+        isDefault,
+        memberCount: countMap[d._id.toString()] || 0,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -155,6 +195,16 @@ const createDepartment = async (req, res) => {
       description: description && typeof description === 'string' ? description.trim() : '',
       createdBy: userId,
     });
+
+    // Automatically create its dedicated department chat
+    try {
+      await Chat.create({
+        startup: startupId,
+        department: department._id,
+        name: `${department.name} Team Chat`,
+        type: 'DEPARTMENT',
+      });
+    } catch (e) {}
 
     return res.status(201).json({
       success: true,
@@ -243,14 +293,114 @@ const updateDepartment = async (req, res) => {
 };
 
 /**
+ * GET /api/startups/:startupId/departments/:departmentId
+ * or GET /api/departments/:departmentId
+ * Retrieve single department details and its active members
+ */
+const getDepartmentById = async (req, res) => {
+  try {
+    const { startupId, departmentId } = req.params;
+    const userId = (req.user.userId || req.user.id)?.toString();
+
+    if (!departmentId || !mongoose.Types.ObjectId.isValid(departmentId)) {
+      return res.status(400).json({ success: false, message: 'Valid department ID is required' });
+    }
+
+    const department = await Department.findById(departmentId).populate('startup');
+    if (!department) {
+      return res.status(404).json({ success: false, message: 'Department not found' });
+    }
+
+    const actualStartupId = department.startup?._id || department.startup;
+    if (startupId && startupId !== actualStartupId.toString()) {
+      return res.status(400).json({ success: false, message: 'Department does not belong to this startup' });
+    }
+
+    // Check authorization: user is founder, active member of the startup, or admin
+    const { isFounder } = await isStartupFounder(actualStartupId, userId);
+    const membership = await TeamMembership.findOne({
+      startup: actualStartupId,
+      user: userId,
+      status: 'ACTIVE',
+    });
+
+    if (!isFounder && !membership && req.user.role !== 'FOUNDER') {
+      return res.status(403).json({ success: false, message: 'Forbidden: You do not have access to this startup workspace' });
+    }
+
+    // Get active members belonging to this department
+    const members = await TeamMembership.find({
+      startup: actualStartupId,
+      department: departmentId,
+      status: 'ACTIVE',
+    })
+      .populate('user', 'name email role')
+      .lean();
+
+    const DeveloperProfile = require('../models/DeveloperProfile');
+    const Task = require('../models/Task');
+
+    const membersWithProfiles = await Promise.all(
+      members.map(async (m) => {
+        const devUserId = m.user?._id;
+        const profile = devUserId ? await DeveloperProfile.findOne({ user: devUserId }).lean() : null;
+
+        let taskStats = { active: 0, completed: 0, total: 0 };
+        if (devUserId) {
+          const tasks = await Task.find({ startup: actualStartupId, assignedTo: devUserId }).select('status');
+          taskStats = {
+            total: tasks.length,
+            active: tasks.filter((t) => t.status === 'TODO' || t.status === 'IN_PROGRESS' || t.status === 'BLOCKED').length,
+            completed: tasks.filter((t) => t.status === 'DONE').length,
+          };
+        }
+
+        return {
+          id: m._id.toString(),
+          _id: m._id.toString(),
+          user: m.user,
+          role: m.role,
+          department: department._id.toString(),
+          departmentRole: m.departmentRole || 'Developer',
+          profile,
+          taskStats,
+          createdAt: m.createdAt,
+        };
+      })
+    );
+
+    const defaultNamesSet = new Set(DEFAULT_DEPARTMENTS.map((d) => d.name.toLowerCase()));
+    const isDefault = Boolean(department.isDefault || defaultNamesSet.has(department.name.toLowerCase()));
+
+    return res.status(200).json({
+      success: true,
+      department: {
+        id: department._id.toString(),
+        _id: department._id.toString(),
+        startup: actualStartupId.toString(),
+        name: department.name,
+        description: department.description || '',
+        isDefault,
+        memberCount: membersWithProfiles.length,
+        createdAt: department.createdAt,
+        updatedAt: department.updatedAt,
+      },
+      members: membersWithProfiles,
+    });
+  } catch (error) {
+    console.error('Error fetching department by ID:', error.message);
+    return res.status(500).json({ success: false, message: 'Server error while fetching department' });
+  }
+};
+
+/**
  * DELETE /api/startups/:startupId/departments/:departmentId
- * Founder deletes a department (checks if members exist, supports ?force=true)
+ * Founder deletes a department (disallows default departments and departments with active members)
  */
 const deleteDepartment = async (req, res) => {
   try {
     const { startupId, departmentId } = req.params;
     const userId = (req.user.userId || req.user.id)?.toString();
-    const force = req.query.force === 'true';
 
     const { exists, isFounder } = await isStartupFounder(startupId, userId);
     if (!exists) {
@@ -269,6 +419,15 @@ const deleteDepartment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Department not found in this startup' });
     }
 
+    // Default departments cannot be deleted
+    const defaultNamesSet = new Set(DEFAULT_DEPARTMENTS.map((d) => d.name.toLowerCase()));
+    if (department.isDefault || defaultNamesSet.has(department.name.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Default departments cannot be deleted',
+      });
+    }
+
     // Check if active members exist in this department
     const activeMembersCount = await TeamMembership.countDocuments({
       startup: startupId,
@@ -276,20 +435,13 @@ const deleteDepartment = async (req, res) => {
       status: 'ACTIVE',
     });
 
-    if (activeMembersCount > 0 && !force) {
+    if (activeMembersCount > 0) {
       return res.status(400).json({
         success: false,
-        requiresConfirmation: true,
         activeMembersCount,
-        message: `Department "${department.name}" has ${activeMembersCount} active member(s). Move them or pass force=true to reassign them to Unassigned.`,
+        message: 'This department has active members. Move the members to another department before deleting it.',
       });
     }
-
-    // If force is true or no members, unassign any remaining memberships
-    await TeamMembership.updateMany(
-      { startup: startupId, department: departmentId },
-      { $set: { department: null } }
-    );
 
     await Department.findByIdAndDelete(departmentId);
 
@@ -305,6 +457,7 @@ const deleteDepartment = async (req, res) => {
 
 module.exports = {
   getStartupDepartments,
+  getDepartmentById,
   createDepartment,
   updateDepartment,
   deleteDepartment,

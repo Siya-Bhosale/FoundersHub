@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Task = require('../models/Task');
 const Startup = require('../models/Startup');
 const TeamMembership = require('../models/TeamMembership');
+const Department = require('../models/Department');
 const Sprint = require('../models/Sprint');
 
 /**
@@ -40,9 +41,56 @@ async function canAccessStartup(startupId, userId) {
 }
 
 /**
+ * Auto-migrate any unpopulated historical tasks that have an assigned developer
+ * to their active membership department in MongoDB.
+ */
+async function autoMigrateHistoricalTasks(startupId) {
+  try {
+    const unmigratedTasks = await Task.find({
+      startup: startupId,
+      department: null,
+      assignedTo: { $ne: null },
+    });
+
+    if (unmigratedTasks.length > 0) {
+      const memberships = await TeamMembership.find({
+        startup: startupId,
+        status: 'ACTIVE',
+      });
+
+      const userDeptMap = {};
+      memberships.forEach((m) => {
+        if (m.user && m.department) {
+          userDeptMap[m.user.toString()] = m.department;
+        }
+      });
+
+      const bulkOps = [];
+      for (const t of unmigratedTasks) {
+        const uId = t.assignedTo?.toString();
+        if (uId && userDeptMap[uId]) {
+          bulkOps.push({
+            updateOne: {
+              filter: { _id: t._id },
+              update: { $set: { department: userDeptMap[uId] } },
+            },
+          });
+        }
+      }
+
+      if (bulkOps.length > 0) {
+        await Task.bulkWrite(bulkOps);
+      }
+    }
+  } catch (err) {
+    console.error('Error auto-migrating historical tasks:', err.message);
+  }
+}
+
+/**
  * POST /api/startups/:startupId/tasks
  * POST /api/tasks/startup/:startupId
- * Create a new task under a startup.
+ * Create a new task under a startup with strict department validation.
  */
 const createTask = async (req, res) => {
   try {
@@ -67,6 +115,8 @@ const createTask = async (req, res) => {
       estimatedHours,
       assignedTo,
       developerId,
+      department,
+      departmentId,
       sprint,
       sprintId,
     } = req.body;
@@ -75,15 +125,77 @@ const createTask = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Task title is required' });
     }
 
-    // Resolve assignedTo or developerId
+    // Resolve assigned developer
     const rawAssignee = assignedTo || developerId;
     let targetAssignee = null;
-    if (rawAssignee && typeof rawAssignee === 'string' && mongoose.Types.ObjectId.isValid(rawAssignee)) {
-      targetAssignee = new mongoose.Types.ObjectId(rawAssignee);
-    } else if (rawAssignee && typeof rawAssignee === 'object') {
-      const idStr = (rawAssignee._id || rawAssignee.id)?.toString();
-      if (idStr && mongoose.Types.ObjectId.isValid(idStr)) {
-        targetAssignee = new mongoose.Types.ObjectId(idStr);
+    let devMembership = null;
+
+    if (rawAssignee && rawAssignee !== 'unassigned') {
+      let assigneeIdStr = '';
+      if (typeof rawAssignee === 'string' && mongoose.Types.ObjectId.isValid(rawAssignee)) {
+        assigneeIdStr = rawAssignee;
+      } else if (typeof rawAssignee === 'object') {
+        assigneeIdStr = (rawAssignee._id || rawAssignee.id)?.toString() || '';
+      }
+
+      if (assigneeIdStr && mongoose.Types.ObjectId.isValid(assigneeIdStr)) {
+        targetAssignee = new mongoose.Types.ObjectId(assigneeIdStr);
+        devMembership = await TeamMembership.findOne({
+          startup: startupId,
+          user: targetAssignee,
+          status: 'ACTIVE',
+        });
+
+        if (!devMembership) {
+          return res.status(400).json({
+            success: false,
+            message: 'Assigned developer must be an active team member of this startup',
+          });
+        }
+      }
+    }
+
+    // Resolve department
+    const rawDept = department || departmentId;
+    let targetDepartment = null;
+
+    if (rawDept && rawDept !== 'ALL') {
+      let deptIdStr = '';
+      if (typeof rawDept === 'string' && mongoose.Types.ObjectId.isValid(rawDept)) {
+        deptIdStr = rawDept;
+      } else if (typeof rawDept === 'object') {
+        deptIdStr = (rawDept._id || rawDept.id)?.toString() || '';
+      }
+
+      if (deptIdStr && mongoose.Types.ObjectId.isValid(deptIdStr)) {
+        const deptDoc = await Department.findOne({ _id: deptIdStr, startup: startupId });
+        if (!deptDoc) {
+          return res.status(400).json({
+            success: false,
+            message: 'Specified department does not exist in this startup',
+          });
+        }
+        targetDepartment = deptDoc._id;
+      }
+    }
+
+    // Strict Cross-Department Assignment Validation:
+    // If founder selects Department = Operations and Developer = John (who belongs to Development), REJECT
+    if (targetAssignee && devMembership) {
+      const devDeptId = devMembership.department ? devMembership.department.toString() : null;
+
+      if (targetDepartment) {
+        if (!devDeptId || devDeptId !== targetDepartment.toString()) {
+          const expectedDept = await Department.findById(targetDepartment);
+          const actualDept = devDeptId ? await Department.findById(devDeptId) : null;
+          return res.status(400).json({
+            success: false,
+            message: `Selected developer belongs to ${actualDept ? actualDept.name : 'another department'}, not ${expectedDept ? expectedDept.name : 'the selected department'}. Cannot assign tasks across departments.`,
+          });
+        }
+      } else if (devDeptId) {
+        // Automatically derive task department from developer's active membership
+        targetDepartment = devMembership.department;
       }
     }
 
@@ -98,6 +210,7 @@ const createTask = async (req, res) => {
 
     const task = new Task({
       startup: startupId,
+      department: targetDepartment,
       sprint: targetSprint,
       title: title.trim(),
       description: description ? description.trim() : '',
@@ -113,6 +226,7 @@ const createTask = async (req, res) => {
 
     await task.save();
     await task.populate('assignedTo', 'name email role');
+    await task.populate('department', 'name description isDefault');
 
     return res.status(201).json({
       success: true,
@@ -129,13 +243,12 @@ const createTask = async (req, res) => {
 /**
  * GET /api/startups/:startupId/tasks
  * GET /api/tasks/startup/:startupId
- * List tasks for a startup:
- * - If Founder: returns all startup tasks (or filtered by view=my if specified).
+ * List tasks for a startup with strict department-based authorization:
+ * - If Founder: returns all startup tasks (with optional departmentId filter).
  * - If Developer (active team member):
- *     - view=my: returns ONLY tasks assigned to this developer.
- *     - view=all: returns ALL tasks belonging to startup (historical tasks included for late-joiners).
- * - Dynamically derives department from assignee's active TeamMembership.
- * - If neither: 403 Forbidden.
+ *     - view=my: returns ONLY tasks assigned directly to this developer.
+ *     - view=all: returns ALL tasks belonging to the developer's CURRENT ACTIVE DEPARTMENT.
+ *       (Tasks from other departments are strictly forbidden and never exposed).
  */
 const getStartupTasks = async (req, res) => {
   try {
@@ -150,27 +263,80 @@ const getStartupTasks = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Forbidden: Access denied' });
     }
 
+    // Auto-migrate any unpopulated assigned historical tasks
+    await autoMigrateHistoricalTasks(startupId);
+
     const view = (req.query.view || (access.isFounder ? 'all' : 'my')).toLowerCase();
     const query = { startup: startupId };
 
-    if (!access.isFounder) {
+    let currentDepartment = null;
+
+    if (access.isFounder) {
+      // Founder view
+      if (req.query.departmentId && req.query.departmentId !== 'ALL') {
+        if (mongoose.Types.ObjectId.isValid(req.query.departmentId)) {
+          query.department = new mongoose.Types.ObjectId(req.query.departmentId);
+        }
+      }
       if (view === 'my') {
         query.assignedTo = new mongoose.Types.ObjectId(userId);
       }
-      // If view === 'all', developer sees all startup tasks
-    } else if (view === 'my') {
-      query.assignedTo = new mongoose.Types.ObjectId(userId);
+    } else {
+      // DEVELOPER VIEW:
+      // Determine department strictly from ACTIVE TeamMembership
+      const devMembership = access.membership;
+      const devDeptId = devMembership?.department;
+
+      if (devDeptId) {
+        const deptDoc = await Department.findById(devDeptId);
+        if (deptDoc) {
+          currentDepartment = {
+            id: deptDoc._id.toString(),
+            _id: deptDoc._id.toString(),
+            name: deptDoc.name,
+            description: deptDoc.description || '',
+            isDefault: deptDoc.isDefault,
+          };
+        }
+      }
+
+      // If developer tries to supply another departmentId in query parameters, validate it!
+      if (req.query.departmentId && req.query.departmentId !== 'ALL') {
+        const requestedDeptStr = req.query.departmentId.toString();
+        const devDeptStr = devDeptId ? devDeptId.toString() : '';
+
+        if (!devDeptStr || requestedDeptStr !== devDeptStr) {
+          return res.status(403).json({
+            success: false,
+            message: 'Forbidden: You cannot access tasks outside your department',
+          });
+        }
+      }
+
+      if (view === 'my') {
+        // MY TASKS: Tasks assigned specifically to the logged-in developer
+        query.assignedTo = new mongoose.Types.ObjectId(userId);
+      } else {
+        // ALL TASKS: ALL tasks belonging to the developer's CURRENT DEPARTMENT
+        if (devDeptId) {
+          query.department = devDeptId;
+        } else {
+          // If developer has no department assigned yet, only show tasks assigned to them
+          query.assignedTo = new mongoose.Types.ObjectId(userId);
+        }
+      }
     }
 
     const tasks = await Task.find(query)
       .populate('assignedTo', 'name email role')
+      .populate('department', 'name description isDefault')
       .sort({ day: 1, createdAt: 1 });
 
-    // Derive department for each assignee from active TeamMembership
+    // Derive department fallback for formatting consistency
     const memberships = await TeamMembership.find({
       startup: startupId,
       status: 'ACTIVE',
-    }).populate('department', 'name description');
+    }).populate('department', 'name description isDefault');
 
     const memberDeptMap = {};
     memberships.forEach((m) => {
@@ -181,6 +347,7 @@ const getStartupTasks = async (req, res) => {
           _id: m.department._id?.toString() || m.department.toString(),
           name: m.department.name,
           description: m.department.description || '',
+          isDefault: m.department.isDefault,
         };
       }
     });
@@ -188,7 +355,17 @@ const getStartupTasks = async (req, res) => {
     const formattedTasks = tasks.map((t) => {
       const tObj = t.toObject ? t.toObject() : { ...t };
       const assigneeId = (t.assignedTo?._id || t.assignedTo)?.toString();
-      tObj.derivedDepartment = assigneeId && memberDeptMap[assigneeId] ? memberDeptMap[assigneeId] : null;
+      tObj.derivedDepartment = t.department
+        ? {
+            id: t.department._id?.toString() || t.department.toString(),
+            _id: t.department._id?.toString() || t.department.toString(),
+            name: t.department.name,
+            description: t.department.description || '',
+            isDefault: t.department.isDefault,
+          }
+        : assigneeId && memberDeptMap[assigneeId]
+        ? memberDeptMap[assigneeId]
+        : null;
       return tObj;
     });
 
@@ -197,6 +374,8 @@ const getStartupTasks = async (req, res) => {
       count: formattedTasks.length,
       data: formattedTasks,
       tasks: formattedTasks,
+      isFounder: access.isFounder,
+      currentDepartment,
     });
   } catch (error) {
     console.error('Error fetching tasks:', error.message);
@@ -206,9 +385,9 @@ const getStartupTasks = async (req, res) => {
 
 /**
  * PUT /api/tasks/:taskId
- * Update task status, assignment, or details.
+ * Update task status, assignment, department, or details.
  * - Developer: can only update status of their own assigned task.
- * - Founder: can update all details and reassign.
+ * - Founder: can update all details, reassign, and change department with consistency checks.
  */
 const updateTask = async (req, res) => {
   try {
@@ -239,6 +418,8 @@ const updateTask = async (req, res) => {
       estimatedHours,
       assignedTo,
       developerId,
+      department,
+      departmentId,
     } = req.body;
 
     if (!access.isFounder) {
@@ -265,6 +446,7 @@ const updateTask = async (req, res) => {
 
       await task.save();
       await task.populate('assignedTo', 'name email role');
+      await task.populate('department', 'name description isDefault');
 
       return res.status(200).json({
         success: true,
@@ -274,7 +456,7 @@ const updateTask = async (req, res) => {
       });
     }
 
-    // Founder can update all task fields and reassign
+    // Founder update logic
     if (title !== undefined) task.title = title.trim();
     if (description !== undefined) task.description = description.trim();
     if (priority !== undefined && ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(priority)) {
@@ -284,21 +466,68 @@ const updateTask = async (req, res) => {
     if (dueDate !== undefined) task.dueDate = dueDate ? new Date(dueDate) : null;
     if (estimatedHours !== undefined) task.estimatedHours = Number(estimatedHours) || 0;
 
-    const rawAssignee = assignedTo !== undefined ? assignedTo : developerId;
-    if (rawAssignee !== undefined) {
-      if (!rawAssignee || rawAssignee === '' || rawAssignee === 'unassigned') {
-        task.assignedTo = null;
-      } else if (typeof rawAssignee === 'string' && mongoose.Types.ObjectId.isValid(rawAssignee)) {
-        task.assignedTo = new mongoose.Types.ObjectId(rawAssignee);
-      } else if (typeof rawAssignee === 'object') {
-        const idStr = (rawAssignee._id || rawAssignee.id)?.toString();
-        if (idStr && mongoose.Types.ObjectId.isValid(idStr)) {
-          task.assignedTo = new mongoose.Types.ObjectId(idStr);
-        } else {
-          task.assignedTo = null;
-        }
+    // Handle department update
+    const rawDept = department !== undefined ? department : departmentId;
+    let newDepartmentId = task.department;
+    if (rawDept !== undefined) {
+      if (!rawDept || rawDept === '' || rawDept === 'unassigned') {
+        newDepartmentId = null;
+      } else if (typeof rawDept === 'string' && mongoose.Types.ObjectId.isValid(rawDept)) {
+        newDepartmentId = new mongoose.Types.ObjectId(rawDept);
+      } else if (typeof rawDept === 'object') {
+        const idStr = (rawDept._id || rawDept.id)?.toString();
+        newDepartmentId = idStr && mongoose.Types.ObjectId.isValid(idStr) ? new mongoose.Types.ObjectId(idStr) : null;
       }
     }
+
+    // Handle assignment update
+    const rawAssignee = assignedTo !== undefined ? assignedTo : developerId;
+    let newAssigneeId = task.assignedTo;
+    if (rawAssignee !== undefined) {
+      if (!rawAssignee || rawAssignee === '' || rawAssignee === 'unassigned') {
+        newAssigneeId = null;
+      } else if (typeof rawAssignee === 'string' && mongoose.Types.ObjectId.isValid(rawAssignee)) {
+        newAssigneeId = new mongoose.Types.ObjectId(rawAssignee);
+      } else if (typeof rawAssignee === 'object') {
+        const idStr = (rawAssignee._id || rawAssignee.id)?.toString();
+        newAssigneeId = idStr && mongoose.Types.ObjectId.isValid(idStr) ? new mongoose.Types.ObjectId(idStr) : null;
+      }
+    }
+
+    // Validate developer & department consistency if assignee is provided
+    if (newAssigneeId) {
+      const devMembership = await TeamMembership.findOne({
+        startup: task.startup,
+        user: newAssigneeId,
+        status: 'ACTIVE',
+      });
+
+      if (!devMembership) {
+        return res.status(400).json({
+          success: false,
+          message: 'Assigned developer must be an active team member of this startup',
+        });
+      }
+
+      const devDeptId = devMembership.department ? devMembership.department.toString() : null;
+
+      if (newDepartmentId) {
+        if (!devDeptId || devDeptId !== newDepartmentId.toString()) {
+          const expectedDept = await Department.findById(newDepartmentId);
+          const actualDept = devDeptId ? await Department.findById(devDeptId) : null;
+          return res.status(400).json({
+            success: false,
+            message: `Selected developer belongs to ${actualDept ? actualDept.name : 'another department'}, not ${expectedDept ? expectedDept.name : 'the selected department'}.`,
+          });
+        }
+      } else if (devDeptId) {
+        // Auto-assign task department to match developer's department
+        newDepartmentId = devMembership.department;
+      }
+    }
+
+    task.assignedTo = newAssigneeId;
+    task.department = newDepartmentId;
 
     if (status !== undefined) {
       if (['TODO', 'IN_PROGRESS', 'BLOCKED', 'DONE'].includes(status)) {
@@ -313,6 +542,7 @@ const updateTask = async (req, res) => {
 
     await task.save();
     await task.populate('assignedTo', 'name email role');
+    await task.populate('department', 'name description isDefault');
 
     return res.status(200).json({
       success: true,
@@ -328,7 +558,7 @@ const updateTask = async (req, res) => {
 
 /**
  * GET /api/tasks/my-tasks
- * Get tasks assigned to current logged-in developer.
+ * Get tasks assigned to current logged-in developer across startups.
  */
 const getMyTasks = async (req, res) => {
   try {
@@ -336,6 +566,7 @@ const getMyTasks = async (req, res) => {
 
     const tasks = await Task.find({ assignedTo: new mongoose.Types.ObjectId(userId) })
       .populate('startup', 'name stage industry')
+      .populate('department', 'name description isDefault')
       .populate('sprint', 'name status')
       .populate('assignedTo', 'name email role')
       .sort({ dueDate: 1, createdAt: -1 });

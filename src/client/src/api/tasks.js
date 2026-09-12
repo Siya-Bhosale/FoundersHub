@@ -7,6 +7,7 @@ import apiClient from './client';
 export const getStartupTasks = async (startupId, params = {}) => {
   const query = new URLSearchParams();
   if (params.view) query.append('view', params.view);
+  if (params.departmentId && params.departmentId !== 'ALL') query.append('departmentId', params.departmentId);
   const qs = query.toString() ? `?${query.toString()}` : '';
   return await apiClient(`/startups/${startupId}/tasks${qs}`);
 };

@@ -174,7 +174,7 @@ const MyStartupsPage = () => {
 
                     {/* Tagline / Description */}
                     <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed min-h-[2rem]">
-                      {startup.tagline || startup.description || 'Active startup venture on SprintFounders.'}
+                      {startup.tagline || startup.description || 'Active startup venture on FoundersHub.'}
                     </p>
 
                     {/* Metadata Badges */}

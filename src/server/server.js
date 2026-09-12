@@ -16,6 +16,8 @@ const taskRoutes = require('./routes/taskRoutes');
 const financeRoutes = require('./routes/financeRoutes');
 const investorRoutes = require('./routes/investorRoutes');
 const fundingInterestRoutes = require('./routes/fundingInterestRoutes');
+const departmentRoutes = require('./routes/departmentRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 
 // Connect to MongoDB
 connectDB();
@@ -30,6 +32,8 @@ app.use(express.json());
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/startups', startupRoutes);
+app.use('/api/departments', departmentRoutes);
+app.use('/api/chats', chatRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/developers', developerRoutes);
 app.use('/api/join-requests', joinRequestRoutes);

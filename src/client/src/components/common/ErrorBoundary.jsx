@@ -12,7 +12,7 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('SprintFounders React ErrorBoundary caught an error:', error, errorInfo);
+    console.error('FoundersHub React ErrorBoundary caught an error:', error, errorInfo);
     this.setState({ errorInfo });
   }
 

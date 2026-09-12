@@ -39,10 +39,10 @@ const Navbar = ({ onToggleSidebar }) => {
           )}
 
           <Link to="/" className="flex items-center gap-2.5 font-bold text-xl text-[#F3F4F6] tracking-tight hover:opacity-90 transition">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/20 border border-indigo-400/20 shrink-0">
-              <Rocket className="w-5 h-5" />
-            </div>
-            <span className="hidden sm:inline">Sprint<span className="text-indigo-400">Founders</span></span>
+            <img src="/assets/foundershub-logo.png" alt="FoundersHub" className="h-8 w-8 object-contain" />
+            <span className="font-bold tracking-tight text-xl text-white">
+              Founders<span className="text-violet-400">Hub</span>
+            </span>
           </Link>
         </div>
 

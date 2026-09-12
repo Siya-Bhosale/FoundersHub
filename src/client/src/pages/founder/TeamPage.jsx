@@ -8,6 +8,7 @@ import {
   updateDepartment,
   deleteDepartment,
 } from '../../api/departments';
+import { getDepartmentIconComponent } from './DepartmentWorkspacePage';
 import {
   getStartupJoinRequests,
   acceptJoinRequest,
@@ -190,10 +191,18 @@ const TeamPage = () => {
   // Handle Delete Department
   const handleDeleteDeptClick = (dept) => {
     const deptId = dept._id || dept.id;
-    // Count active members in this department
+    if (dept.isDefault) {
+      alert('Default departments cannot be deleted.');
+      return;
+    }
     const membersInDept = (team?.members || []).filter(
       (m) => (m.department?._id || m.department?.id || m.department) === deptId
     );
+
+    if (membersInDept.length > 0) {
+      alert('This department has active members. Move the members to another department before deleting it.');
+      return;
+    }
 
     setDeleteConfirmDept({
       id: deptId,
@@ -571,7 +580,81 @@ const TeamPage = () => {
         </div>
 
         {/* ====================================================
-            FEATURE 1, 2, 12, 13 — DEPARTMENTS & TEAM ROSTER
+            FEATURE 1 & PART 1 — SELECT A DEPARTMENT (CARD GRID)
+            ==================================================== */}
+        <div className="bg-[#11141C] rounded-2xl border border-[#232735] p-6 sm:p-8 shadow-xl space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[#232735] pb-5">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+                Select a Department
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                Choose a department to enter its dedicated workspace.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={openAddDeptModal}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/20 transition cursor-pointer self-start sm:self-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Department</span>
+            </button>
+          </div>
+
+          {/* 3-column desktop / 2-column tablet / 1-column mobile grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+            {departments.map((dept) => {
+              const deptId = dept._id || dept.id;
+              const deptMembers = deptMembersMap[deptId] || [];
+              const memberCount = dept.memberCount !== undefined ? dept.memberCount : deptMembers.length;
+              const DeptCardIcon = getDepartmentIconComponent(dept.name);
+
+              return (
+                <Link
+                  key={deptId}
+                  to={`/startups/${startupId}/departments/${deptId}`}
+                  className="group relative p-5 rounded-2xl bg-[#171A24] border border-[#2A2F42] hover:border-indigo-500/60 hover:bg-[#1C202C] transition-all duration-200 shadow-sm hover:shadow-indigo-500/10 hover:-translate-y-0.5 flex flex-col justify-between space-y-4 cursor-pointer"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-indigo-950/60 border border-indigo-800/60 text-indigo-400 group-hover:text-indigo-300 group-hover:bg-indigo-900/60 transition flex items-center justify-center shrink-0">
+                      <DeptCardIcon className="w-6 h-6" />
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      {dept.isDefault && (
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800/60 uppercase tracking-wide">
+                          Default
+                        </span>
+                      )}
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#11141C] text-emerald-400 border border-emerald-900/40">
+                        {memberCount} {memberCount === 1 ? 'member' : 'members'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-base font-bold text-white group-hover:text-indigo-300 transition">
+                        {dept.name}
+                      </h3>
+                      <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
+                    </div>
+                    {dept.description && (
+                      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                        {dept.description}
+                      </p>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ====================================================
+            FEATURE 1, 2, 12, 13, 21 — DEPARTMENTS & TEAM ROSTER
             ==================================================== */}
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -623,6 +706,15 @@ const TeamPage = () => {
                     </div>
 
                     <div className="flex items-center gap-2 self-start sm:self-auto">
+                      <Link
+                        to={`/startups/${startupId}/departments/${deptId}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-indigo-300 bg-indigo-950/40 hover:bg-indigo-900/60 border border-indigo-800/40 transition cursor-pointer"
+                        title="Enter dedicated department workspace"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Workspace</span>
+                      </Link>
+
                       <button
                         type="button"
                         onClick={() => openEditDeptModal(dept)}
@@ -751,23 +843,46 @@ const TeamPage = () => {
                               </div>
                             </div>
 
-                            {/* Move Department Select */}
-                            <div className="pt-2 border-t border-[#232735] space-y-1">
-                              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                                Change Department
-                              </label>
-                              <select
-                                value={deptId}
-                                onChange={(e) => handleMoveMember(membershipId, e.target.value)}
-                                className="w-full bg-[#11141C] text-xs text-slate-200 rounded-lg px-2.5 py-1.5 border border-[#2A2F42] hover:border-[#373E54] focus:outline-none focus:border-indigo-500 transition cursor-pointer"
+                            {/* Move Department Select & View Profile */}
+                            <div className="pt-2 border-t border-[#232735] space-y-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSelectedApplication({
+                                    developer: {
+                                      _id: devUser?._id || devUser?.id,
+                                      name: devUser?.name,
+                                      email: devUser?.email,
+                                      profile: devProf,
+                                    },
+                                    requestedRole: m.departmentRole || 'Developer',
+                                    department: dept,
+                                    isAcceptedMember: true,
+                                  })
+                                }
+                                className="w-full py-1.5 rounded-lg text-xs font-semibold text-indigo-300 bg-[#11141C] hover:bg-indigo-950/40 border border-[#232735] hover:border-indigo-800/40 transition cursor-pointer flex items-center justify-center gap-1.5"
                               >
-                                {departments.map((d) => (
-                                  <option key={d._id || d.id} value={d._id || d.id}>
-                                    {d.name}
-                                  </option>
-                                ))}
-                                <option value="">Unassigned</option>
-                              </select>
+                                <span>View Profile</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </button>
+
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
+                                  Change Department
+                                </label>
+                                <select
+                                  value={deptId}
+                                  onChange={(e) => handleMoveMember(membershipId, e.target.value)}
+                                  className="w-full bg-[#11141C] text-xs text-slate-200 rounded-lg px-2.5 py-1.5 border border-[#2A2F42] hover:border-[#373E54] focus:outline-none focus:border-indigo-500 transition cursor-pointer"
+                                >
+                                  {departments.map((d) => (
+                                    <option key={d._id || d.id} value={d._id || d.id}>
+                                      {d.name}
+                                    </option>
+                                  ))}
+                                  <option value="">Unassigned</option>
+                                </select>
+                              </div>
                             </div>
                           </div>
                         );

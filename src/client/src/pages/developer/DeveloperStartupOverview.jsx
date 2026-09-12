@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   PlayCircle,
+  MessageSquare,
 } from 'lucide-react';
 
 const DeveloperStartupOverview = () => {
@@ -266,7 +267,7 @@ const DeveloperStartupOverview = () => {
             <span className="text-xs text-slate-500">Fast access to startup execution tools</span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
             <Link
               to={`/developer/startups/${startupId}/tasks`}
               className="p-4 rounded-xl bg-[#171A24] border border-[#2A2F42] hover:border-indigo-500/40 hover:bg-[#1E2330] transition flex flex-col items-center justify-center text-center gap-2 group shadow-sm"
@@ -278,6 +279,19 @@ const DeveloperStartupOverview = () => {
                 My Tasks
               </span>
               <span className="text-[10px] text-slate-400">Kanban Board</span>
+            </Link>
+
+            <Link
+              to={`/developer/startups/${startupId}/chat`}
+              className="p-4 rounded-xl bg-[#171A24] border border-[#2A2F42] hover:border-indigo-500/40 hover:bg-[#1E2330] transition flex flex-col items-center justify-center text-center gap-2 group shadow-sm"
+            >
+              <div className="w-10 h-10 rounded-xl bg-indigo-950/60 text-indigo-400 border border-indigo-800/60 flex items-center justify-center group-hover:scale-105 transition-transform">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <span className="text-xs font-bold text-white group-hover:text-indigo-300 transition">
+                Team Chat
+              </span>
+              <span className="text-[10px] text-slate-400">Department Channel</span>
             </Link>
 
             <Link

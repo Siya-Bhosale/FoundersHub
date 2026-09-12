@@ -33,8 +33,18 @@ export const updateDepartment = async (startupId, departmentId, { name, descript
 };
 
 /**
+ * Fetch a single department along with its active members and stats.
+ * GET /api/startups/:startupId/departments/:departmentId
+ */
+export const getDepartmentById = async (startupId, departmentId) => {
+  return await apiClient(`/startups/${startupId}/departments/${departmentId}`, {
+    method: 'GET',
+  });
+};
+
+/**
  * Founder deletes a department.
- * DELETE /api/startups/:startupId/departments/:departmentId?force=true|false
+ * DELETE /api/startups/:startupId/departments/:departmentId
  */
 export const deleteDepartment = async (startupId, departmentId, { force = false } = {}) => {
   const qs = force ? '?force=true' : '';
@@ -42,3 +52,4 @@ export const deleteDepartment = async (startupId, departmentId, { force = false 
     method: 'DELETE',
   });
 };
+

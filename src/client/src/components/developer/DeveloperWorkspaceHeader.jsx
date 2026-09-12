@@ -14,6 +14,7 @@ import {
   Sparkles,
   ShieldAlert,
   Tag,
+  MessageSquare,
 } from 'lucide-react';
 
 const STAGE_CONFIG = {
@@ -26,6 +27,7 @@ const STAGE_CONFIG = {
 const WORKSPACE_TOOLS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard, pathSuffix: '' },
   { id: 'tasks', label: 'My Tasks', icon: SquareCheck, pathSuffix: '/tasks' },
+  { id: 'chat', label: 'Department Chat', icon: MessageSquare, pathSuffix: '/chat' },
   { id: 'execution', label: 'Execution', icon: Activity, pathSuffix: '/execution' },
   { id: 'sprint', label: 'Sprint', icon: CalendarDays, pathSuffix: '/sprint' },
   { id: 'team', label: 'Team', icon: Users, pathSuffix: '/team' },

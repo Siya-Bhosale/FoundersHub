@@ -35,6 +35,8 @@ import RiskAnalysisPage from './pages/founder/RiskAnalysisPage';
 import SprintPlannerPage from './pages/founder/SprintPlannerPage';
 import StartupAnalyzerPage from './pages/founder/StartupAnalyzerPage';
 import TeamPage from './pages/founder/TeamPage';
+import DepartmentWorkspacePage from './pages/founder/DepartmentWorkspacePage';
+import DepartmentChatPage from './pages/chat/DepartmentChatPage';
 import InvestorInterestPage from './pages/founder/InvestorInterestPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
@@ -178,6 +180,30 @@ const AppContent = () => {
               }
             />
             <Route
+              path="/developer/startups/:startupId/chat"
+              element={
+                <ProtectedRoute allowedRoles={['DEVELOPER']}>
+                  <DepartmentChatPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/developer/startups/:startupId/chat/:departmentId"
+              element={
+                <ProtectedRoute allowedRoles={['DEVELOPER']}>
+                  <DepartmentChatPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/developer/startups/:startupId/departments/:departmentId"
+              element={
+                <ProtectedRoute allowedRoles={['DEVELOPER']}>
+                  <DepartmentWorkspacePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/developer/startups/:startupId/analyzer"
               element={
                 <ProtectedRoute allowedRoles={['DEVELOPER']}>
@@ -196,7 +222,10 @@ const AppContent = () => {
             <Route
               path="/startups/create"
               element={
-                <ProtectedRoute allowedRoles={['FOUNDER']}>
+                <ProtectedRoute
+                  allowedRoles={['FOUNDER']}
+                  message="Startup creation is strictly reserved for Founder accounts."
+                >
                   <CreateStartup />
                 </ProtectedRoute>
               }
@@ -212,7 +241,10 @@ const AppContent = () => {
             <Route
               path="/startups/:id/edit"
               element={
-                <ProtectedRoute allowedRoles={['FOUNDER']}>
+                <ProtectedRoute
+                  allowedRoles={['FOUNDER']}
+                  message="Editing startup details is strictly reserved for Founder accounts."
+                >
                   <EditStartup />
                 </ProtectedRoute>
               }
@@ -334,6 +366,54 @@ const AppContent = () => {
               element={
                 <ProtectedRoute allowedRoles={['FOUNDER', 'DEVELOPER']}>
                   <TeamPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/startups/:startupId/departments/:departmentId"
+              element={
+                <ProtectedRoute allowedRoles={['FOUNDER', 'DEVELOPER']}>
+                  <DepartmentWorkspacePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/departments/:startupId/:departmentId"
+              element={
+                <ProtectedRoute allowedRoles={['FOUNDER', 'DEVELOPER']}>
+                  <DepartmentWorkspacePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/startups/:startupId/chat"
+              element={
+                <ProtectedRoute allowedRoles={['FOUNDER', 'DEVELOPER']}>
+                  <DepartmentChatPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/startups/:startupId/chat/:departmentId"
+              element={
+                <ProtectedRoute allowedRoles={['FOUNDER', 'DEVELOPER']}>
+                  <DepartmentChatPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chat/:startupId"
+              element={
+                <ProtectedRoute>
+                  <DepartmentChatPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chat/:startupId/:departmentId"
+              element={
+                <ProtectedRoute>
+                  <DepartmentChatPage />
                 </ProtectedRoute>
               }
             />

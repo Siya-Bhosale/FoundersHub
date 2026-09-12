@@ -96,12 +96,25 @@ const createBatchTasksHandler = async (req, res) => {
 
     const currentSprint = await Sprint.findOne({ startup: startupId, status: 'ACTIVE' }).sort({ createdAt: -1 });
 
+    const TeamMembership = require('../models/TeamMembership');
+    const memberships = await TeamMembership.find({ startup: startupId, status: 'ACTIVE' });
+    const userDeptMap = {};
+    memberships.forEach((m) => {
+      if (m.user && m.department) {
+        userDeptMap[m.user.toString()] = m.department;
+      }
+    });
+
     const createdTasks = [];
     for (const t of tasks) {
       if (!t.title || typeof t.title !== 'string') continue;
 
+      const targetAssignee = t.assignedTo && mongoose.Types.ObjectId.isValid(t.assignedTo) ? t.assignedTo : null;
+      const targetDept = targetAssignee && userDeptMap[targetAssignee.toString()] ? userDeptMap[targetAssignee.toString()] : null;
+
       const created = await Task.create({
         startup: startupId,
+        department: targetDept,
         sprint: currentSprint?._id || null,
         title: t.title.trim(),
         description: t.description || '',
@@ -109,7 +122,7 @@ const createBatchTasksHandler = async (req, res) => {
         status: ['TODO', 'IN_PROGRESS', 'BLOCKED', 'DONE'].includes(t.status) ? t.status : 'TODO',
         day: Number(t.day) || 1,
         estimatedHours: Number(t.estimatedHours) || 3,
-        assignedTo: t.assignedTo && mongoose.Types.ObjectId.isValid(t.assignedTo) ? t.assignedTo : null,
+        assignedTo: targetAssignee,
       });
       createdTasks.push(created);
     }

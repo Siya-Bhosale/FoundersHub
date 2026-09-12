@@ -41,8 +41,7 @@ const DeveloperTasksPage = () => {
 
   const [startup, setStartup] = useState(null);
   const [tasks, setTasks] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [departmentFilter, setDepartmentFilter] = useState('ALL');
+  const [currentDepartment, setCurrentDepartment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [taskFilter, setTaskFilter] = useState('MY_TASKS'); // 'MY_TASKS' | 'ALL'
@@ -61,15 +60,16 @@ const DeveloperTasksPage = () => {
     setLoading(true);
     try {
       const viewParam = filterMode === 'MY_TASKS' ? 'my' : 'all';
-      const [sRes, tRes, dRes] = await Promise.all([
+      const [sRes, tRes] = await Promise.all([
         getStartupById(startupId),
         getStartupTasks(startupId, { view: viewParam }),
-        getStartupDepartments(startupId).catch(() => ({ departments: [] })),
       ]);
 
       setStartup(sRes.startup);
       setTasks(tRes.data || tRes.tasks || []);
-      setDepartments(dRes.departments || []);
+      if (tRes.currentDepartment) {
+        setCurrentDepartment(tRes.currentDepartment);
+      }
       try {
         localStorage.setItem('sprintfounders_active_startup', startupId);
       } catch (e) {}
@@ -138,15 +138,8 @@ const DeveloperTasksPage = () => {
     );
   }
 
-  // Filter tasks: in ALL view, apply optional department filter
-  const displayedTasks = tasks.filter((t) => {
-    if (taskFilter === 'MY_TASKS') return true; // Already filtered by backend view=my
-    if (departmentFilter === 'ALL') return true;
-
-    const deptId = t.derivedDepartment?._id || t.derivedDepartment?.id;
-    const deptName = t.derivedDepartment?.name;
-    return deptId === departmentFilter || deptName === departmentFilter;
-  });
+  // Displayed tasks are strictly authorized and scoped by the backend
+  const displayedTasks = tasks;
 
   return (
     <div className="bg-[#0B0D12] min-h-[calc(100vh-4rem)] py-8 px-4 sm:px-6 lg:px-8">
@@ -165,34 +158,30 @@ const DeveloperTasksPage = () => {
               <SquareCheck className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight">
-                Kanban Task Board
-              </h2>
-              <p className="text-xs text-slate-400">
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-lg font-bold text-white tracking-tight">
+                  Tasks
+                </h2>
+                {currentDepartment && (
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 uppercase tracking-wide">
+                    {currentDepartment.name} Department
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
                 {taskFilter === 'MY_TASKS'
-                  ? 'Showing tasks assigned directly to you.'
-                  : 'Showing startup-wide deliverables across all team members.'}
+                  ? 'Tasks assigned to you'
+                  : `All tasks in ${currentDepartment?.name || 'your department'}`}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {/* Department Filter (Only active in ALL TASKS view) */}
-            {taskFilter === 'ALL' && departments.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <select
-                  value={departmentFilter}
-                  onChange={(e) => setDepartmentFilter(e.target.value)}
-                  className="bg-[#171A24] text-xs text-slate-200 rounded-xl px-3 py-1.5 border border-[#2A2F42] hover:border-[#373E54] focus:outline-none focus:border-indigo-500 transition cursor-pointer"
-                >
-                  <option value="ALL">All Departments</option>
-                  {departments.map((dept) => (
-                    <option key={dept._id || dept.id} value={dept._id || dept.id}>
-                      {dept.name}
-                    </option>
-                  ))}
-                </select>
+            {/* Department Indicator */}
+            {currentDepartment && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#171A24] border border-[#2A2F42] text-xs">
+                <span className="text-slate-400 font-medium">Current Department:</span>
+                <span className="text-white font-bold">{currentDepartment.name}</span>
               </div>
             )}
 
@@ -201,6 +190,7 @@ const DeveloperTasksPage = () => {
               <button
                 type="button"
                 onClick={() => setTaskFilter('MY_TASKS')}
+                title="Tasks assigned to you"
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                   taskFilter === 'MY_TASKS'
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
@@ -212,6 +202,7 @@ const DeveloperTasksPage = () => {
               <button
                 type="button"
                 onClick={() => setTaskFilter('ALL')}
+                title={`All tasks in ${currentDepartment?.name || 'your department'}`}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                   taskFilter === 'ALL'
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'

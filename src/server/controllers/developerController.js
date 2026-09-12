@@ -488,10 +488,12 @@ const getMyStartups = async (req, res) => {
     const memberships = await TeamMembership.find({
       user: userId,
       status: 'ACTIVE',
-    }).populate({
-      path: 'startup',
-      select: 'name tagline industry stage description problemStatement solution',
-    });
+    })
+      .populate({
+        path: 'startup',
+        select: 'name tagline industry stage description problemStatement solution',
+      })
+      .populate('department', 'name description isDefault');
 
     // Filter memberships where startup exists and is valid
     const validMemberships = memberships.filter((m) => m.startup && m.startup._id);
@@ -521,6 +523,16 @@ const getMyStartups = async (req, res) => {
     const formattedStartups = validMemberships.map((m) => {
       const s = m.startup;
       const sId = s._id.toString();
+      const deptObj = m.department
+        ? {
+            id: m.department._id ? m.department._id.toString() : m.department.toString(),
+            _id: m.department._id ? m.department._id.toString() : m.department.toString(),
+            name: m.department.name || 'General',
+            description: m.department.description || '',
+            isDefault: m.department.isDefault,
+          }
+        : null;
+
       return {
         id: sId,
         _id: sId,
@@ -530,14 +542,26 @@ const getMyStartups = async (req, res) => {
         stage: s.stage || 'MVP',
         description: s.description || '',
         teamSize: countMap[sId] || 2,
-        role: m.role || 'DEVELOPER',
-        joinedAt: m.joinedAt,
+        role: m.departmentRole || m.role || 'DEVELOPER',
+        department: deptObj,
+        membership: {
+          id: m._id.toString(),
+          _id: m._id.toString(),
+          department: deptObj,
+          departmentRole: m.departmentRole || m.role || 'DEVELOPER',
+          role: m.departmentRole || m.role || 'DEVELOPER',
+          status: m.status,
+          joinedAt: m.createdAt,
+        },
+        joinedAt: m.joinedAt || m.createdAt,
       };
     });
 
     return res.status(200).json({
       success: true,
+      count: formattedStartups.length,
       startups: formattedStartups,
+      role: 'DEVELOPER',
     });
   } catch (error) {
     console.error('Get developer startups error:', error);

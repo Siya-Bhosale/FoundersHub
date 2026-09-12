@@ -105,7 +105,117 @@ const createStartup = async (req, res) => {
 
 const getMyStartups = async (req, res) => {
   try {
-    const userId = req.user.userId || req.user.id;
+    const userId = (req.user?.userId || req.user?.id || req.user?._id)?.toString();
+    const userRole = (req.user?.role || '').toUpperCase();
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required',
+      });
+    }
+
+    // ==========================================
+    // 1. DEVELOPER ROLE
+    // ==========================================
+    if (userRole === 'DEVELOPER') {
+      const memberships = await TeamMembership.find({
+        user: new mongoose.Types.ObjectId(userId),
+        status: 'ACTIVE',
+      })
+        .populate({
+          path: 'startup',
+          populate: { path: 'founder', select: 'name email role' },
+        })
+        .populate('department', 'name description isDefault')
+        .sort({ createdAt: -1 });
+
+      const formattedStartups = await Promise.all(
+        memberships.map(async (m) => {
+          const s = m.startup;
+          if (!s) return null;
+
+          const teamCount = await TeamMembership.countDocuments({
+            startup: s._id,
+            status: 'ACTIVE',
+          });
+
+          const deptObj = m.department
+            ? {
+                id: m.department._id ? m.department._id.toString() : m.department.toString(),
+                _id: m.department._id ? m.department._id.toString() : m.department.toString(),
+                name: m.department.name || 'General',
+                description: m.department.description || '',
+                isDefault: m.department.isDefault,
+              }
+            : null;
+
+          const membershipObj = {
+            id: m._id.toString(),
+            _id: m._id.toString(),
+            department: deptObj,
+            departmentRole: m.departmentRole || 'Developer',
+            role: m.departmentRole || 'Developer',
+            status: m.status,
+            joinedAt: m.createdAt,
+          };
+
+          return {
+            id: s._id.toString(),
+            _id: s._id.toString(),
+            name: s.name,
+            tagline: s.tagline,
+            problemStatement: s.problemStatement,
+            solution: s.solution,
+            industry: s.industry,
+            stage: s.stage,
+            description: s.description,
+            founder: s.founder,
+            teamSize: teamCount + 1, // members + founder
+            role: m.departmentRole || 'Developer',
+            department: deptObj,
+            membership: membershipObj,
+            startup: {
+              id: s._id.toString(),
+              _id: s._id.toString(),
+              name: s.name,
+              tagline: s.tagline,
+              industry: s.industry,
+              stage: s.stage,
+              description: s.description,
+            },
+            createdAt: s.createdAt,
+            updatedAt: s.updatedAt,
+          };
+        })
+      );
+
+      const cleanList = formattedStartups.filter(Boolean);
+
+      const membershipsMap = {};
+      cleanList.forEach((item) => {
+        const sId = item._id || item.id;
+        membershipsMap[sId] = {
+          startupId: sId,
+          departmentId: item.department?.id || item.department?._id,
+          departmentName: item.department?.name,
+          departmentRole: item.membership?.departmentRole || item.role,
+          status: item.membership?.status || 'ACTIVE',
+        };
+      });
+
+      return res.status(200).json({
+        success: true,
+        count: cleanList.length,
+        startups: cleanList,
+        memberships: membershipsMap,
+        role: 'DEVELOPER',
+      });
+    }
+
+    // ==========================================
+    // 2. FOUNDER ROLE (or default)
+    // ==========================================
     const startups = await Startup.find({
       $or: [{ founder: userId }, { founderId: userId }],
     }).sort({ createdAt: -1 });
@@ -131,24 +241,37 @@ const getMyStartups = async (req, res) => {
       pendingMap[p._id.toString()] = p.count;
     });
 
-    const formattedStartups = startups.map((s) => ({
-      id: s._id.toString(),
-      name: s.name,
-      tagline: s.tagline,
-      problemStatement: s.problemStatement,
-      solution: s.solution,
-      industry: s.industry,
-      stage: s.stage,
-      description: s.description,
-      founder: (s.founder || s.founderId)?.toString() || null,
-      pendingRequestsCount: pendingMap[s._id.toString()] || 0,
-      createdAt: s.createdAt,
-      updatedAt: s.updatedAt,
-    }));
+    const formattedStartups = await Promise.all(
+      startups.map(async (s) => {
+        const teamCount = await TeamMembership.countDocuments({
+          startup: s._id,
+          status: 'ACTIVE',
+        });
+
+        return {
+          id: s._id.toString(),
+          _id: s._id.toString(),
+          name: s.name,
+          tagline: s.tagline,
+          problemStatement: s.problemStatement,
+          solution: s.solution,
+          industry: s.industry,
+          stage: s.stage,
+          description: s.description,
+          founder: (s.founder || s.founderId)?.toString() || null,
+          teamSize: teamCount + 1,
+          pendingRequestsCount: pendingMap[s._id.toString()] || 0,
+          createdAt: s.createdAt,
+          updatedAt: s.updatedAt,
+        };
+      })
+    );
 
     return res.status(200).json({
       success: true,
+      count: formattedStartups.length,
       startups: formattedStartups,
+      role: 'FOUNDER',
     });
   } catch (error) {
     console.error('Get my startups error:', error);

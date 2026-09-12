@@ -11,6 +11,7 @@ const { getStartupJoinRequests, createJoinRequest } = require('../controllers/jo
 const { getStartupTeam, updateMemberDepartment } = require('../controllers/teamController');
 const {
   getStartupDepartments,
+  getDepartmentById,
   createDepartment,
   updateDepartment,
   deleteDepartment,
@@ -38,13 +39,14 @@ router.get('/my', getMyStartups);
 router.get('/:id', getStartupById);
 
 // PUT /api/startups/:id (Update startup - owner only)
-router.put('/:id', updateStartup);
+router.put('/:id', requireRole('FOUNDER'), updateStartup);
 
 // DELETE /api/startups/:id (Delete startup - owner only)
-router.delete('/:id', deleteStartup);
+router.delete('/:id', requireRole('FOUNDER'), deleteStartup);
 
 // Departments under startup
 router.get('/:startupId/departments', getStartupDepartments);
+router.get('/:startupId/departments/:departmentId', getDepartmentById);
 router.post('/:startupId/departments', requireRole('FOUNDER'), createDepartment);
 router.put('/:startupId/departments/:departmentId', requireRole('FOUNDER'), updateDepartment);
 router.delete('/:startupId/departments/:departmentId', requireRole('FOUNDER'), deleteDepartment);

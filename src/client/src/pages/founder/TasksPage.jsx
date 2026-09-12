@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getStartupById } from '../../api/startups';
 import { getStartupTeam } from '../../api/team';
+import { getStartupDepartments } from '../../api/departments';
 import {
   getStartupTasks,
   createStartupTask,
@@ -25,6 +26,7 @@ import {
   Calendar,
   AlertTriangle,
   ArrowRight,
+  Layers,
   X,
 } from 'lucide-react';
 
@@ -49,6 +51,7 @@ const TasksPage = () => {
   const [startup, setStartup] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -69,11 +72,13 @@ const TasksPage = () => {
     priority: 'MEDIUM',
     day: 1,
     estimatedHours: 3,
+    department: '',
     assignedTo: '',
   });
 
   // Filter state
   const [priorityFilter, setPriorityFilter] = useState('ALL');
+  const [departmentFilter, setDepartmentFilter] = useState('ALL');
 
   const userRole = user?.role?.toUpperCase();
   const currentUserId = (user?.id || user?.userId || user?._id)?.toString();
@@ -90,15 +95,17 @@ const TasksPage = () => {
     setLoading(true);
     setError('');
     try {
-      const [sRes, tRes, tmRes] = await Promise.all([
+      const [sRes, tRes, tmRes, dRes] = await Promise.all([
         getStartupById(startupId),
         getStartupTasks(startupId),
         getStartupTeam(startupId).catch(() => ({ members: [] })),
+        getStartupDepartments(startupId).catch(() => ({ departments: [] })),
       ]);
 
       setStartup(sRes.startup);
       setTasks(tRes.data || tRes.tasks || []);
       setTeamMembers(tmRes.members || []);
+      setDepartments(dRes.departments || []);
       try {
         localStorage.setItem('sprintfounders_active_startup', startupId);
       } catch (e) {}
@@ -210,6 +217,7 @@ const TasksPage = () => {
         priority: newTask.priority,
         day: Number(newTask.day) || 1,
         estimatedHours: Number(newTask.estimatedHours) || 2,
+        department: newTask.department || null,
         assignedTo: newTask.assignedTo || null,
       });
 
@@ -221,6 +229,7 @@ const TasksPage = () => {
           priority: 'MEDIUM',
           day: 1,
           estimatedHours: 3,
+          department: '',
           assignedTo: '',
         });
         setSuccess('Task created successfully!');
@@ -299,6 +308,10 @@ const TasksPage = () => {
   // Filter tasks
   const filteredTasks = tasks.filter((t) => {
     if (priorityFilter !== 'ALL' && t.priority !== priorityFilter) return false;
+    if (departmentFilter !== 'ALL') {
+      const tDeptId = (t.department?._id || t.department?.id || t.department || t.derivedDepartment?._id || t.derivedDepartment?.id)?.toString();
+      if (tDeptId !== departmentFilter) return false;
+    }
     return true;
   });
 
@@ -413,25 +426,46 @@ const TasksPage = () => {
 
           {/* Filter Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#232735] text-xs">
-            <div className="flex items-center gap-2">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-slate-400 font-medium">Filter by Priority:</span>
-              <div className="flex items-center gap-1.5">
-                {['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPriorityFilter(p)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
-                      priorityFilter === p
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-[#171A24] text-slate-400 hover:text-slate-200 border border-[#2A2F42]'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-slate-400 font-medium">Priority:</span>
+                <div className="flex items-center gap-1.5">
+                  {['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPriorityFilter(p)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
+                        priorityFilter === p
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-[#171A24] text-slate-400 hover:text-slate-200 border border-[#2A2F42]'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {departments.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Layers className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-slate-400 font-medium">Department:</span>
+                  <select
+                    value={departmentFilter}
+                    onChange={(e) => setDepartmentFilter(e.target.value)}
+                    className="bg-[#171A24] text-xs text-slate-200 rounded-xl px-3 py-1.5 border border-[#2A2F42] hover:border-[#373E54] focus:outline-none focus:border-indigo-500 transition cursor-pointer"
+                  >
+                    <option value="ALL">All Departments</option>
+                    {departments.map((dept) => (
+                      <option key={dept._id || dept.id} value={dept._id || dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             <span className="text-slate-500 text-[11px]">
@@ -778,24 +812,76 @@ const TasksPage = () => {
                 </div>
 
                 <div>
+                  <label className="block font-semibold text-slate-300 mb-1">Department</label>
+                  <select
+                    value={newTask.department}
+                    onChange={(e) => {
+                      const dId = e.target.value;
+                      setNewTask((prev) => {
+                        let newAssignedTo = prev.assignedTo;
+                        if (newAssignedTo && dId) {
+                          const member = teamMembers.find(
+                            (m) => (m.user?._id || m.user?.id)?.toString() === newAssignedTo
+                          );
+                          const memDept = (member?.department?._id || member?.department?.id || member?.department)?.toString();
+                          if (memDept && memDept !== dId) {
+                            newAssignedTo = '';
+                          }
+                        }
+                        return { ...prev, department: dId, assignedTo: newAssignedTo };
+                      });
+                    }}
+                    className="w-full px-3.5 py-2 text-xs text-white bg-[#171A24] border border-[#2A2F42] rounded-xl focus:outline-hidden focus:border-indigo-500"
+                  >
+                    <option value="">General / Unassigned Department</option>
+                    {departments.map((dept) => (
+                      <option key={dept._id || dept.id} value={dept._id || dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
                   <label className="block font-semibold text-slate-300 mb-1">Assign Developer</label>
                   <select
                     value={newTask.assignedTo}
-                    onChange={(e) => setNewTask({ ...newTask, assignedTo: e.target.value })}
+                    onChange={(e) => {
+                      const devId = e.target.value;
+                      const member = teamMembers.find((m) => (m.user?._id || m.user?.id)?.toString() === devId);
+                      const memDeptId = (member?.department?._id || member?.department?.id || member?.department)?.toString();
+                      setNewTask((prev) => ({
+                        ...prev,
+                        assignedTo: devId,
+                        department: memDeptId || prev.department,
+                      }));
+                    }}
                     className="w-full px-3.5 py-2 text-xs text-white bg-[#171A24] border border-[#2A2F42] rounded-xl focus:outline-hidden focus:border-indigo-500"
                   >
                     <option value="">Unassigned</option>
-                    {teamMembers.map((m) => {
-                      const devUser = m.user;
-                      const devId = devUser?._id || devUser?.id;
-                      if (!devId) return null;
-                      return (
-                        <option key={devId} value={devId}>
-                          {devUser.name} ({m.role || 'Developer'})
-                        </option>
-                      );
-                    })}
+                    {teamMembers
+                      .filter((m) => {
+                        if (!newTask.department) return true;
+                        const memDeptId = (m.department?._id || m.department?.id || m.department)?.toString();
+                        return !memDeptId || memDeptId === newTask.department;
+                      })
+                      .map((m) => {
+                        const devUser = m.user;
+                        const devId = devUser?._id || devUser?.id;
+                        if (!devId) return null;
+                        const deptName = m.department?.name || (departments.find((d) => (d._id || d.id)?.toString() === (m.department?._id || m.department)?.toString())?.name) || '';
+                        return (
+                          <option key={devId} value={devId}>
+                            {devUser.name} {deptName ? `(${deptName})` : `(${m.role || 'Developer'})`}
+                          </option>
+                        );
+                      })}
                   </select>
+                  {newTask.department && (
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Showing developers in selected department.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#232735]">

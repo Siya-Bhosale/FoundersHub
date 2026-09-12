@@ -191,10 +191,15 @@ const login = async (req, res) => {
 
 const getMe = async (req, res) => {
   try {
+    const userId = req.user.userId || req.user.id;
+    const user = await User.findById(userId).select('name email role');
     return res.status(200).json({
       success: true,
       user: {
-        id: req.user.id,
+        id: userId,
+        _id: userId,
+        name: user ? user.name : '',
+        email: user ? user.email : '',
         role: req.user.role,
       },
     });

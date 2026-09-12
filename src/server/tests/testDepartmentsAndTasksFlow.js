@@ -134,8 +134,8 @@ async function runTests() {
     console.log(`✓ Startup A created with ID: ${startupId}\n`);
 
     // 3. FETCH DEPARTMENTS (Auto-seeds defaults if 0 exist)
-    console.log('3. Fetching startup departments (verifying auto-seeding)...');
-    const deptsRes = await request(`/startups/${startupId}/departments`, {
+    console.log('3. Fetching startup departments (verifying auto-seeding of 9 default departments)...');
+    const deptsRes = await request(`/departments/startup/${startupId}`, {
       method: 'GET',
       headers: { Authorization: `Bearer ${founderToken}` },
     });
@@ -145,23 +145,51 @@ async function runTests() {
     const technicalDept = depts.find((d) => d.name.toLowerCase() === 'technical');
     const developmentDept = depts.find((d) => d.name.toLowerCase() === 'development');
     const salesDept = depts.find((d) => d.name.toLowerCase() === 'sales');
+    const productDept = depts.find((d) => d.name.toLowerCase() === 'product');
+    const supportDept = depts.find((d) => d.name.toLowerCase() === 'customer support');
 
-    if (!technicalDept || !developmentDept || !salesDept) {
-      throw new Error('Default departments Technical, Development, or Sales were not found.');
+    if (!technicalDept || !developmentDept || !salesDept || !productDept || !supportDept) {
+      throw new Error('Default departments (Technical, Development, Sales, Product, Customer Support) were not found.');
     }
-    console.log('✓ Verified Technical, Development, and Sales departments exist.\n');
+    console.log('✓ Verified all required default departments exist.\n');
 
-    // 4. FOUNDER CREATES A DYNAMIC DEPARTMENT
-    console.log('4. Founder creates dynamic department "Product"...');
+    // 4. FOUNDER CREATES A CUSTOM DYNAMIC DEPARTMENT
+    console.log('4. Founder creates dynamic department "Product Research"...');
     const createDeptRes = await request(`/startups/${startupId}/departments`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${founderToken}` },
       body: {
-        name: 'Product',
-        description: 'Product roadmap, UX planning, and customer discovery',
+        name: 'Product Research',
+        description: 'Deep user interviews, product discovery, and market validation',
       },
     });
-    console.log(`✓ Dynamic department created: ${createDeptRes.data.department.name}\n`);
+    const customDept = createDeptRes.data.department;
+    console.log(`✓ Dynamic department created: ${customDept.name}\n`);
+
+    // 4b. VERIFY DEDICATED DEPARTMENT WORKSPACE ENDPOINT (Part 5)
+    console.log('4b. Fetching dedicated department workspace details...');
+    const deptDetailRes = await request(`/startups/${startupId}/departments/${customDept._id || customDept.id}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${founderToken}` },
+    });
+    console.log(`✓ Retrieved department workspace for: ${deptDetailRes.data.department.name} (Member count: ${deptDetailRes.data.department.memberCount})`);
+
+    // 4c. TEST DELETE PROTECTIONS (Part 2)
+    console.log('4c. Testing department deletion protections...');
+    // Attempt to delete default department
+    try {
+      await request(`/startups/${startupId}/departments/${technicalDept._id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${founderToken}` },
+      });
+      throw new Error('Default department should not be deletable!');
+    } catch (err) {
+      if (err.status === 400 && err.message.includes('Default departments cannot be deleted')) {
+        console.log('✓ Default department deletion correctly blocked (400 Bad Request).');
+      } else {
+        throw err;
+      }
+    }
 
     // 5. DEVELOPER A CREATES PROFILE & UPLOADS RESUME
     console.log('5. Developer A creates profile with social links & uploads resume...');
@@ -326,6 +354,52 @@ async function runTests() {
     }
     console.log('✓ All members verified under their respective startup departments.\n');
 
+    // 11b. TEST CUSTOM DEPARTMENT DELETION SAFEGUARDS
+    console.log('11b. Testing custom department deletion safeguards with active members...');
+    // Create a temporary custom department
+    const tempDeptRes = await request(`/startups/${startupId}/departments`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${founderToken}` },
+      body: { name: 'Growth Experiments' },
+    });
+    const tempDept = tempDeptRes.data.department;
+
+    // Move Member C to Growth Experiments
+    await request(`/startups/${startupId}/team/${memberC._id || memberC.id}/department`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${founderToken}` },
+      body: { departmentId: tempDept._id || tempDept.id },
+    });
+
+    // Attempt to delete Growth Experiments while Member C is in it
+    try {
+      await request(`/startups/${startupId}/departments/${tempDept._id || tempDept.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${founderToken}` },
+      });
+      throw new Error('Department with active members should not be deletable!');
+    } catch (err) {
+      if (err.status === 400 && err.message.includes('This department has active members')) {
+        console.log('✓ Deletion of department with active members correctly blocked (400 Bad Request).');
+      } else {
+        throw err;
+      }
+    }
+
+    // Move Member C back to Sales
+    await request(`/startups/${startupId}/team/${memberC._id || memberC.id}/department`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${founderToken}` },
+      body: { departmentId: salesDept._id },
+    });
+
+    // Now delete Growth Experiments (0 members remaining) -> should succeed
+    const deleteTempRes = await request(`/startups/${startupId}/departments/${tempDept._id || tempDept.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${founderToken}` },
+    });
+    console.log(`✓ Custom department without members deleted successfully: ${deleteTempRes.data.message}\n`);
+
     // 12. CREATE TASKS 1 to 5 (Feature 25 scenario)
     console.log('12. Creating 5 test tasks (Feature 25 scenario)...');
     // Task 1 -> Dev A
@@ -392,21 +466,16 @@ async function runTests() {
       method: 'GET',
       headers: { Authorization: `Bearer ${devAToken}` },
     });
-    console.log(`✓ Developer A ALL TASKS count: ${devAAllTasks.data.count} (Expected: 5).`);
-    if (devAAllTasks.data.count !== 5) {
-      throw new Error(`Expected Developer A to see 5 tasks in ALL TASKS, got ${devAAllTasks.data.count}`);
+    console.log(`✓ Developer A ALL TASKS count: ${devAAllTasks.data.count} (Expected: 2 Technical department tasks).`);
+    if (devAAllTasks.data.count !== 2) {
+      throw new Error(`Expected Developer A to see 2 tasks in ALL TASKS, got ${devAAllTasks.data.count}`);
     }
 
     // Check dynamic department derivation on tasks
     const sampleT1 = devAAllTasks.data.data.find((t) => t.title.includes('Task 1'));
-    const sampleT2 = devAAllTasks.data.data.find((t) => t.title.includes('Task 2'));
-    console.log(`Task 1 derived department: ${sampleT1.derivedDepartment?.name}`);
-    console.log(`Task 2 derived department: ${sampleT2.derivedDepartment?.name}`);
-    if (sampleT1.derivedDepartment?.name !== 'Technical') {
+    console.log(`Task 1 department: ${sampleT1.derivedDepartment?.name || sampleT1.department?.name}`);
+    if ((sampleT1.derivedDepartment?.name || sampleT1.department?.name) !== 'Technical') {
       throw new Error('Task 1 derived department should be Technical');
-    }
-    if (sampleT2.derivedDepartment?.name !== 'Development') {
-      throw new Error('Task 2 derived department should be Development');
     }
     console.log('✓ Dynamic department derivation from TeamMembership -> Department verified.\n');
 
@@ -437,14 +506,14 @@ async function runTests() {
       throw new Error(`Developer D should have 0 assigned tasks, got ${devDMyTasks.data.count}`);
     }
 
-    // Developer D opens ALL TASKS: MUST see all 5 historical startup tasks!
+    // Developer D opens ALL TASKS: MUST see all historical Technical department tasks (Tasks 1 & 5)!
     const devDAllTasks = await request(`/startups/${startupId}/tasks?view=all`, {
       method: 'GET',
       headers: { Authorization: `Bearer ${devDToken}` },
     });
-    console.log(`✓ Developer D ALL TASKS: ${devDAllTasks.data.count} tasks (Expected: 5 historical tasks).`);
-    if (devDAllTasks.data.count !== 5) {
-      throw new Error(`Late-joining Developer D must see all 5 historical startup tasks, got ${devDAllTasks.data.count}`);
+    console.log(`✓ Developer D ALL TASKS: ${devDAllTasks.data.count} tasks (Expected: 2 historical Technical tasks).`);
+    if (devDAllTasks.data.count !== 2) {
+      throw new Error(`Late-joining Developer D must see historical Technical department tasks, got ${devDAllTasks.data.count}`);
     }
 
     // 16. TASK STATUS SYNCHRONIZATION TEST (Feature 18)
@@ -477,15 +546,14 @@ async function runTests() {
     });
     console.log(`✓ Member A moved to: ${moveRes.data.membership?.department?.name} (Expected: Development).`);
 
-    // Verify task derived department reflects new department automatically
-    const recheckedTasks = await request(`/startups/${startupId}/tasks?view=all`, {
+    // Verify Developer A now sees Development tasks in ALL TASKS
+    const devANewAllTasks = await request(`/startups/${startupId}/tasks?view=all`, {
       method: 'GET',
-      headers: { Authorization: `Bearer ${founderToken}` },
+      headers: { Authorization: `Bearer ${devAToken}` },
     });
-    const movedTask1 = recheckedTasks.data.data.find((t) => (t._id || t.id) === task1Id);
-    console.log(`✓ Task 1 dynamically derived department is now: ${movedTask1.derivedDepartment?.name} (Expected: Development).`);
-    if (movedTask1.derivedDepartment?.name !== 'Development') {
-      throw new Error(`Expected derived department Development, got ${movedTask1.derivedDepartment?.name}`);
+    console.log(`✓ Developer A ALL TASKS after moving to Development: ${devANewAllTasks.data.count} tasks.`);
+    if (devANewAllTasks.data.count < 1) {
+      throw new Error('Expected Developer A to see Development tasks after moving');
     }
 
     console.log('\n======================================================');

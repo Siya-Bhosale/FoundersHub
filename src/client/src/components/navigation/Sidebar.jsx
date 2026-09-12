@@ -28,6 +28,7 @@ import {
   Building2,
   Briefcase,
   Send,
+  MessageSquare,
 } from 'lucide-react';
 
 const ROLE_BADGES = {
@@ -68,6 +69,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       '/investor/',
       '/developer/startups/',
       '/developer/my-startups',
+      '/chat',
     ];
     for (const p of prefixes) {
       if (cleanPath.startsWith(p) && location.pathname.startsWith(p)) return true;
@@ -99,6 +101,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       '/team/',
       '/funding-interest/',
       '/investor-interest/',
+      '/chat/',
     ];
 
     let urlStartupId = null;
@@ -122,7 +125,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         {
           title: 'CORE',
           items: [
-            { label: 'Overview', icon: LayoutDashboard, path: '/dashboard' },
+            { label: 'Overview', icon: LayoutDashboard, path: targetStartupId ? `${devStartupPrefix}` : '/dashboard' },
             { label: 'My Startups', icon: Briefcase, path: '/developer/my-startups' },
             { label: 'Discover Startups', icon: Compass, path: '/startups/discover' },
             { label: 'My Profile', icon: User, path: '/developer/profile' },
@@ -135,6 +138,12 @@ const Sidebar = ({ isOpen, onClose }) => {
             { label: 'Execution', icon: Activity, path: targetStartupId ? `${devStartupPrefix}/execution` : '/developer/my-startups' },
             { label: 'Sprint', icon: CalendarDays, path: targetStartupId ? `${devStartupPrefix}/sprint` : '/developer/my-startups' },
             { label: 'Team', icon: Users, path: targetStartupId ? `${devStartupPrefix}/team` : '/developer/my-startups' },
+          ],
+        },
+        {
+          title: 'COMMUNICATION',
+          items: [
+            { label: 'Department Chat', icon: MessageSquare, path: targetStartupId ? `${devStartupPrefix}/chat` : '/developer/my-startups' },
           ],
         },
         {
@@ -180,38 +189,40 @@ const Sidebar = ({ isOpen, onClose }) => {
         title: 'CORE',
         items: [
           { label: 'Overview', icon: LayoutDashboard, path: targetStartupId ? `/startups/${targetStartupId}` : '/dashboard' },
-          { label: 'Sprint Planner', icon: ListChecks, path: targetStartupId ? `/sprint-planner/${targetStartupId}` : '/dashboard' },
-          { label: 'AI Mentor', icon: Bot, path: targetStartupId ? `/ai-mentor/${targetStartupId}` : '/dashboard' },
+          { label: 'My Startups', icon: Briefcase, path: '/dashboard' },
+          { label: 'My Profile', icon: User, path: '/dashboard' },
         ],
       },
       {
         title: 'EXECUTION',
         items: [
+          { label: 'Sprint', icon: ListChecks, path: targetStartupId ? `/sprint-planner/${targetStartupId}` : '/dashboard' },
           { label: 'Tasks', icon: SquareCheck, path: targetStartupId ? `/tasks/${targetStartupId}` : '/dashboard' },
-          { label: 'Execution Intelligence', icon: Activity, path: targetStartupId ? `/execution/${targetStartupId}` : '/dashboard' },
-          { label: 'Timeline', icon: Clock, comingSoon: true, description: 'Gantt and milestone roadmap tracking' },
+          { label: 'Execution', icon: Activity, path: targetStartupId ? `/execution/${targetStartupId}` : '/dashboard' },
           { label: 'Team', icon: Users, path: targetStartupId ? `/team/${targetStartupId}` : '/dashboard' },
         ],
       },
       {
-        title: 'AI & INSIGHTS',
+        title: 'COMMUNICATION',
         items: [
-          { label: 'Startup Analyzer', icon: Sparkles, path: targetStartupId ? `/ai-analyzer/${targetStartupId}` : '/dashboard' },
-          { label: 'Risk Analysis', icon: ShieldAlert, path: targetStartupId ? `/risk-analysis/${targetStartupId}` : '/dashboard' },
+          { label: 'Department Chats', icon: MessageSquare, path: targetStartupId ? `/startups/${targetStartupId}/chat` : '/dashboard' },
         ],
       },
       {
-        title: 'TOOLS',
+        title: 'AI TOOLS',
         items: [
-          { label: 'Finance', icon: DollarSign, path: targetStartupId ? `/finance/${targetStartupId}` : '/finance' },
+          { label: 'Startup Analyzer', icon: Sparkles, path: targetStartupId ? `/ai-analyzer/${targetStartupId}` : '/dashboard' },
+          { label: 'AI Mentor', icon: Bot, path: targetStartupId ? `/ai-mentor/${targetStartupId}` : '/dashboard' },
+          { label: 'Risk Analysis', icon: ShieldAlert, path: targetStartupId ? `/risk-analysis/${targetStartupId}` : '/dashboard' },
+          { label: 'Pitch', icon: Presentation, path: targetStartupId ? `/pitch/${targetStartupId}` : '/dashboard' },
         ],
       },
       {
         title: 'FUNDING',
         items: [
-          { label: 'Investor Interest', icon: Handshake, path: targetStartupId ? `/funding-interest/${targetStartupId}` : '/dashboard' },
-          { label: 'Investor Matching', icon: Building2, comingSoon: true, description: 'AI-driven investor introductions and warm leads' },
-          { label: 'Pitch Generator', icon: Presentation, path: targetStartupId ? `/pitch/${targetStartupId}` : '/dashboard' },
+          { label: 'Finance', icon: DollarSign, path: targetStartupId ? `/finance/${targetStartupId}` : '/finance' },
+          { label: 'Investors', icon: Building2, path: '/investor-matching' },
+          { label: 'Funding Interest', icon: Handshake, path: targetStartupId ? `/funding-interest/${targetStartupId}` : '/dashboard' },
         ],
       },
     ];
@@ -243,15 +254,13 @@ const Sidebar = ({ isOpen, onClose }) => {
             onClick={onClose}
             className="flex items-center gap-2.5 font-bold text-lg text-white tracking-tight hover:opacity-90 transition"
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/20 border border-indigo-400/20">
-              <Rocket className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="leading-tight">
-                Sprint<span className="text-indigo-400">Founders</span>
+            <img src="/assets/foundershub-logo.png" alt="FoundersHub" className="h-8 w-8 object-contain shrink-0" />
+            <div className="flex flex-col">
+              <div className="leading-tight text-white font-bold text-base tracking-tight">
+                Founders<span className="text-violet-400">Hub</span>
               </div>
-              <div className="text-[9px] font-normal text-slate-400 tracking-wider">
-                Idea → Execution → Funding
+              <div className="text-[9px] font-semibold text-slate-400 tracking-wider uppercase">
+                FOUND TO BUILD
               </div>
             </div>
           </Link>

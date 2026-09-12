@@ -23,7 +23,7 @@ const Dashboard = () => {
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-                SprintFounders Dashboard
+                FoundersHub Dashboard
               </h1>
               <p className="text-sm text-slate-400 mt-1">
                 Welcome back, <span className="font-semibold text-slate-200">{user?.name}</span>
