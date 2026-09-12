@@ -1,0 +1,26 @@
+{
+  "name": "foundershub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FoundersHub - Delivery is the currency. Team KH095 - Tech Alchemist",
+  "scripts": {
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "server:dev": "npm --prefix src/server run dev",
+    "client:dev": "npm --prefix src/client run dev",
+    "build": "npm --prefix src/client run build",
+    "start": "npm --prefix src/server start"
+  },
+  "keywords": [
+    "foundershub",
+    "startup",
+    "venture",
+    "developer",
+    "investor"
+  ],
+  "author": "Tech Alchemist (KH095)",
+  "license": "MIT",
+  "workspaces": [
+    "src/client",
+    "src/server"
+  ]
+}

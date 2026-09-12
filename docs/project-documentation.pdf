@@ -1,0 +1,112 @@
+%PDF-1.41 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [6 0 R 8 0 R 10 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 630 >>
+stream
+BT
+/F1 18 Tf
+50 750 Td
+(FoundersHub - KH095 Tech Alchemist) Tj
+ET
+BT
+/F2 11 Tf
+50 710 Td
+16 TL
+(Executive Summary & Project Documentation) '
+(Team: Tech Alchemist \(Code: KH095\)) '
+(Project: FoundersHub \(Ideas are cheap. Delivery is the currency.\)) '
+(Date: September 2026) '
+() '
+(FoundersHub is an execution-driven three-sided platform connecting:) '
+(- Startup Founders: Form teams, run 14-day execution sprints across 8 departments.) '
+(- Developers: Apply to departments, claim tasks, ship verified code, earn equity.) '
+(- Investors: Discover high-execution startups, evaluate performance scores, syndicate capital.) '
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 1 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>
+endobj
+7 0 obj
+<< /Length 716 >>
+stream
+BT
+/F1 18 Tf
+50 750 Td
+(System Architecture & Technology Stack) Tj
+ET
+BT
+/F2 11 Tf
+50 710 Td
+16 TL
+(Frontend Architecture:) '
+(- Framework: React 19 + Vite \(Single Page Application\)) '
+(- Styling: Tailwind CSS, Glassmorphic UI with Dark Mode design system) '
+(- Icons & Charts: Lucide React, Recharts analytics) '
+(- Routing: React Router v7 with vercel.json SPA rewrites) '
+() '
+(Backend Architecture:) '
+(- Server: Node.js with Express 5 REST API Gateway) '
+(- Database: MongoDB Atlas using Mongoose ORM) '
+(- Authentication: JWT token-based authentication with bcrypt hashing) '
+(- AI Layer: Google Gemini API integration \(@google/genai\)) '
+(- File Uploads: Multer with verified resume upload validation) '
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 3 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>
+endobj
+9 0 obj
+<< /Length 691 >>
+stream
+BT
+/F1 18 Tf
+50 750 Td
+(Core Features & Execution Engine) Tj
+ET
+BT
+/F2 11 Tf
+50 710 Td
+16 TL
+(1. 3-Point Readiness Gate: Validates startup concepts before publishing.) '
+(2. Department-Based Sprints: 8 modular departments \(Engineering, Product, Growth, etc.\).) '
+(3. Dynamic Equity Allocation: Contribution points dynamically calculate equity pie.) '
+(4. Developer Portfolio & Profile: Verified builder score and task milestones.) '
+(5. Financial Ledger & Runway: Burn rate, runway calculation, transaction audit log.) '
+(6. Investor Matching & Syndicate: Deterministic scoring algorithm with 1% platform fee.) '
+(7. AI Founder Copilot & Mentor: Real-time department scoped guidance.) '
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000128 00000 n 
+0000000203 00000 n 
+0000000273 00000 n 
+0000000954 00000 n 
+0000001090 00000 n 
+0000001857 00000 n 
+0000001993 00000 n 
+0000002735 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R >>
+startxref
+2872
+%%EOF
