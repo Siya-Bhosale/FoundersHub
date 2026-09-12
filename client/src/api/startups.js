@@ -1,5 +1,9 @@
 import apiClient from './client';
 
+export const getAllStartups = async () => {
+  return await apiClient('/startups', { method: 'GET' });
+};
+
 export const getMyStartups = async () => {
   return await apiClient('/startups/my', { method: 'GET' });
 };

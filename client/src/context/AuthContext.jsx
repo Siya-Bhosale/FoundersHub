@@ -32,6 +32,9 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     const data = await loginUser({ email, password });
     if (data.token && data.user) {
+      try {
+        localStorage.removeItem('sprintfounders_active_startup');
+      } catch (e) {}
       setToken(data.token);
       setUser(data.user);
       localStorage.setItem(TOKEN_KEY, data.token);
@@ -45,8 +48,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      localStorage.removeItem('sprintfounders_active_startup');
+    } catch (e) {}
     setToken(null);
     setUser(null);
   };

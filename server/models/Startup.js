@@ -83,6 +83,66 @@ const startupSchema = new mongoose.Schema(
       ),
       default: null,
     },
+    executionRiskAnalysis: {
+      type: new mongoose.Schema(
+        {
+          overallRisk: {
+            type: String,
+            enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
+            required: true,
+          },
+          bottleneck: {
+            title: { type: String, required: true },
+            description: { type: String, required: true },
+          },
+          risks: [
+            {
+              title: { type: String, required: true },
+              description: { type: String, required: true },
+              impact: {
+                type: String,
+                enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
+                default: 'MEDIUM',
+              },
+            },
+          ],
+          recommendations: [
+            {
+              priority: { type: String, default: 'HIGH' },
+              action: { type: String, required: true },
+              reason: { type: String, required: true },
+            },
+          ],
+          positiveSignals: [{ type: String }],
+          source: {
+            type: String,
+            enum: ['gemini', 'fallback'],
+            required: true,
+          },
+          generatedAt: {
+            type: Date,
+            default: Date.now,
+          },
+        },
+        { _id: false }
+      ),
+      default: null,
+    },
+    fundingRequired: {
+      type: Number,
+      default: 0,
+      min: [0, 'Funding required cannot be negative'],
+    },
+    fundingReceived: {
+      type: Number,
+      default: 0,
+      min: [0, 'Funding received cannot be negative'],
+    },
+    initialCapital: {
+      type: Number,
+      default: 0,
+      min: [0, 'Initial capital cannot be negative'],
+    },
   },
   {
     timestamps: true,

@@ -9,6 +9,13 @@ const healthRoutes = require('./routes/healthRoutes');
 const authRoutes = require('./routes/authRoutes');
 const startupRoutes = require('./routes/startupRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const developerRoutes = require('./routes/developerRoutes');
+const joinRequestRoutes = require('./routes/joinRequestRoutes');
+const executionRoutes = require('./routes/executionRoutes');
+const taskRoutes = require('./routes/taskRoutes');
+const financeRoutes = require('./routes/financeRoutes');
+const investorRoutes = require('./routes/investorRoutes');
+const fundingInterestRoutes = require('./routes/fundingInterestRoutes');
 
 // Connect to MongoDB
 connectDB();
@@ -24,6 +31,13 @@ app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/startups', startupRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/developers', developerRoutes);
+app.use('/api/join-requests', joinRequestRoutes);
+app.use('/api/execution', executionRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/finance', financeRoutes);
+app.use('/api/investors', investorRoutes);
+app.use('/api/funding-interest', fundingInterestRoutes);
 
 const PORT = process.env.PORT || 5000;
 

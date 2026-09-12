@@ -7,8 +7,9 @@ const requireRole = (...allowedRoles) => {
       });
     }
 
-    const roles = allowedRoles.flat();
-    if (!roles.includes(req.user.role)) {
+    const roles = allowedRoles.flat().map((r) => r.toUpperCase());
+    const userRole = (req.user.role || '').toUpperCase();
+    if (!roles.includes(userRole)) {
       return res.status(403).json({
         success: false,
         message: 'Forbidden: Insufficient role permissions',

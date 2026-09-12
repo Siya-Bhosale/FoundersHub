@@ -9,11 +9,19 @@ export const apiClient = async (endpoint, options = {}) => {
     ...options.headers,
   };
 
+  let body = options.body;
+  if (body !== undefined && body !== null) {
+    if (typeof body === 'object' && !(body instanceof FormData) && !(body instanceof URLSearchParams)) {
+      body = JSON.stringify(body);
+    }
+  }
+
   let response;
   try {
     response = await fetch(`${API_URL}${endpoint}`, {
       ...options,
       headers,
+      body,
     });
   } catch (networkError) {
     throw new Error('Unable to connect to the server. Please check your internet connection.');
@@ -34,20 +42,20 @@ export const apiClient = async (endpoint, options = {}) => {
           errorMessage = 'Invalid request. Please check your input.';
           break;
         case 401:
-          errorMessage = 'Your session has expired. Please log in again.';
+          errorMessage = 'Please log in again.';
           try {
             localStorage.removeItem('sprintfounders_token');
             localStorage.removeItem('sprintfounders_user');
           } catch (e) {}
           break;
         case 403:
-          errorMessage = "You don't have permission to perform this action.";
+          errorMessage = "You don't have permission to access this startup's finances.";
           break;
         case 404:
           errorMessage = 'Startup not found.';
           break;
         case 500:
-          errorMessage = 'Something went wrong. Please try again.';
+          errorMessage = 'Unable to load financial data. Please try again.';
           break;
         default:
           errorMessage = `Request failed with status ${response.status}`;

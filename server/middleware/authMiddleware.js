@@ -24,7 +24,7 @@ const authMiddleware = (req, res, next) => {
     req.user = {
       id: decoded.userId,
       userId: decoded.userId,
-      role: decoded.role,
+      role: decoded.role ? decoded.role.toUpperCase() : undefined,
     };
     next();
   } catch (error) {

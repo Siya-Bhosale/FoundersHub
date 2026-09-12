@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
 const Startup = require('../models/Startup');
+const JoinRequest = require('../models/JoinRequest');
+const TeamMembership = require('../models/TeamMembership');
+const User = require('../models/User');
 
 const ALLOWED_STAGES = ['IDEA', 'MVP', 'EARLY_TRACTION', 'GROWTH'];
 
@@ -102,7 +105,31 @@ const createStartup = async (req, res) => {
 
 const getMyStartups = async (req, res) => {
   try {
-    const startups = await Startup.find({ founder: req.user.userId }).sort({ createdAt: -1 });
+    const userId = req.user.userId || req.user.id;
+    const startups = await Startup.find({
+      $or: [{ founder: userId }, { founderId: userId }],
+    }).sort({ createdAt: -1 });
+
+    const startupIds = startups.map((s) => s._id);
+    const pendingCounts = await JoinRequest.aggregate([
+      {
+        $match: {
+          startup: { $in: startupIds },
+          status: 'PENDING',
+        },
+      },
+      {
+        $group: {
+          _id: '$startup',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const pendingMap = {};
+    pendingCounts.forEach((p) => {
+      pendingMap[p._id.toString()] = p.count;
+    });
 
     const formattedStartups = startups.map((s) => ({
       id: s._id.toString(),
@@ -113,7 +140,8 @@ const getMyStartups = async (req, res) => {
       industry: s.industry,
       stage: s.stage,
       description: s.description,
-      founder: s.founder.toString(),
+      founder: (s.founder || s.founderId)?.toString() || null,
+      pendingRequestsCount: pendingMap[s._id.toString()] || 0,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
     }));
@@ -151,14 +179,28 @@ const getStartupById = async (req, res) => {
       });
     }
 
-    const founderData = startup.founder && typeof startup.founder === 'object' && startup.founder._id
-      ? {
-          id: startup.founder._id.toString(),
-          name: startup.founder.name,
-          email: startup.founder.email,
-          role: startup.founder.role,
-        }
-      : startup.founder ? startup.founder.toString() : null;
+    const founderObj = startup.founder || startup.founderId;
+    let founderData = null;
+    if (founderObj && typeof founderObj === 'object' && founderObj._id) {
+      founderData = {
+        id: founderObj._id.toString(),
+        name: founderObj.name,
+        email: founderObj.email,
+        role: founderObj.role,
+      };
+    } else if (founderObj) {
+      const founderUser = await User.findById(founderObj).select('name email role');
+      if (founderUser) {
+        founderData = {
+          id: founderUser._id.toString(),
+          name: founderUser.name,
+          email: founderUser.email,
+          role: founderUser.role,
+        };
+      } else {
+        founderData = founderObj.toString();
+      }
+    }
 
     return res.status(200).json({
       success: true,
@@ -173,6 +215,10 @@ const getStartupById = async (req, res) => {
         description: startup.description,
         founder: founderData,
         aiAnalysis: startup.aiAnalysis || null,
+        initialCapital: startup.initialCapital || 0,
+        fundingRequired: startup.fundingRequired || 0,
+        fundingReceived: startup.fundingReceived || 0,
+        targetRunwayMonths: startup.targetRunwayMonths || 12,
         createdAt: startup.createdAt,
         updatedAt: startup.updatedAt,
       },
@@ -348,6 +394,10 @@ const deleteStartup = async (req, res) => {
       });
     }
 
+    // Cascade delete any associated join requests and team memberships
+    await JoinRequest.deleteMany({ startup: startup._id });
+    await TeamMembership.deleteMany({ startup: startup._id });
+
     await startup.deleteOne();
 
     return res.status(200).json({
@@ -363,10 +413,54 @@ const deleteStartup = async (req, res) => {
   }
 };
 
+const getAllStartups = async (req, res) => {
+  try {
+    const startups = await Startup.find()
+      .populate('founder', 'name email role')
+      .sort({ createdAt: -1 });
+
+    const formattedStartups = startups.map((s) => ({
+      id: s._id.toString(),
+      name: s.name,
+      tagline: s.tagline,
+      problemStatement: s.problemStatement,
+      solution: s.solution,
+      industry: s.industry,
+      stage: s.stage,
+      description: s.description,
+      founder: s.founder && typeof s.founder === 'object' && s.founder._id
+        ? {
+            id: s.founder._id.toString(),
+            name: s.founder.name,
+            role: s.founder.role,
+          }
+        : s.founder ? s.founder.toString() : null,
+      initialCapital: s.initialCapital || 0,
+      fundingRequired: s.fundingRequired || 0,
+      fundingReceived: s.fundingReceived || 0,
+      targetRunwayMonths: s.targetRunwayMonths || 12,
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      startups: formattedStartups,
+    });
+  } catch (error) {
+    console.error('Get all startups error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while fetching startups',
+    });
+  }
+};
+
 module.exports = {
   createStartup,
   getMyStartups,
   getStartupById,
   updateStartup,
   deleteStartup,
+  getAllStartups,
 };
